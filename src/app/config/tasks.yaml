@@ -1,0 +1,93 @@
+# src/app/config/tasks.yaml
+# -------------------------
+# Define as tarefas que a equipe (crew) irá executar.
+# A imposição do schema Pydantic é feita no 'crew.py'.
+
+task_analyze_input:
+  description: >
+    Analisar o prompt inicial do usuário (ex: {user_prompt}) e o arquivo 
+    de dados (ex: {data_path}).
+    A análise deve:
+    1. Validar o formato do arquivo (CSV, XLS, XLSX).
+    2. Extrair o esquema dos dados (colunas, tipos, nulos).
+    3. Gerar um resumo estatístico e semântico.
+    4. Identificar e clarificar a intenção principal do usuário para a visualização.
+  expected_output: >
+    Um objeto 'AnalysisBrief' Pydantic contendo o status, schema, resumo,
+    intenção e amostra dos dados (serializada em JSON).
+  agent: input_analyst
+  async_execution: false
+
+task_plan_visualization:
+  description: >
+    Com base no 'AnalysisBrief' recebido, desenvolver um plano de visualização ('VizPlan').
+    Esta tarefa deve:
+    1. Usar a ferramenta de RAG para consultar o "Storytelling com Dados"
+       sobre a melhor forma de visualizar a 'intencao_clarificada'.
+    2. Definir o tipo de gráfico, mapeamento de eixos, cores e título.
+    3. Justificar a escolha com base nos princípios de visualização de dados.
+  expected_output: >
+    Um objeto 'VizPlan' Pydantic estruturado, contendo a especificação
+    declarativa completa do gráfico (tipo, eixos, cor, título, justificação).
+  agent: viz_planner
+  context:
+    - task_analyze_input
+  async_execution: false
+
+task_generate_code:
+  description: >
+    Converter o 'VizPlan' (JSON/Pydantic) em um código Python executável usando Altair.
+    Esta tarefa deve:
+    1. Receber o 'VizPlan' e o 'AnalysisBrief'.
+    2. Usar a ferramenta 'StreamlitAltairChartsTools' para buscar exemplos
+       e garantir a sintaxe correta.
+    3. Gerar um bloco de código Python limpo (assumindo um dataframe 'df')
+       que seja renderizável com 'st.altair_chart(chart)'.
+  expected_output: >
+    Uma string contendo o bloco de código Python completo para 
+    gerar o gráfico Altair.
+  agent: viz_generator
+  context:
+    - task_plan_visualization
+    - task_analyze_input 
+  async_execution: false
+
+# --- TAREFA FINAL CORRIGIDA E RIGOROSA ---
+task_evaluate_and_refine:
+  description: >
+    Avaliar o código Python gerado ('final_code') comparando-o com o 'VizPlan'
+    e as heurísticas de "Storytelling com Dados" (via RagTool).
+    Esta tarefa deve:
+    1. Gerar o 'evaluation_report' como uma string formatada em Markdown.
+    2. Serializar o 'VizPlan' original como uma string JSON.
+    
+    CRÍTICO: A saída final DEVE ser um único e válido objeto JSON.
+    NÃO use o formato key='value' (com aspas simples).
+    USE ESTRITAMENTE o formato JSON: {"key": "value"} (com aspas duplas e dois-pontos).
+    
+    As chaves do JSON devem ser EXATAMENTE:
+    - "final_code"
+    - "evaluation_report"
+    - "viz_plan_json"
+    
+    Os valores para estas chaves devem ser strings. Certifique-se de que
+    quaisquer quebras de linha (newlines) ou aspas (quotes) dentro das
+    strings de código e relatório sejam devidamente escapadas (ex: \\n, \\").
+    
+    NÃO inclua NENHUM texto, conversa, ou markdown antes ou depois
+    do objeto JSON. A resposta DEVE começar com { e terminar com }.
+  expected_output: >
+    Um objeto JSON válido e único, mapeado para o Pydantic 'ChartOutput',
+    com as chaves "final_code", "evaluation_report", e "viz_plan_json".
+    
+    Exemplo de formato (NÃO de conteúdo):
+    {
+      "final_code": "import altair as alt...",
+      "evaluation_report": "# Relatório\n\n- Ponto 1.",
+      "viz_plan_json": "{\"chart_type\": \"bar\", ...}"
+    }
+  agent: viz_evaluator
+  context:
+    - task_generate_code
+    - task_plan_visualization
+  async_execution: false
