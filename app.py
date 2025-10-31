@@ -62,6 +62,7 @@ def save_log(participant, llm, prompt, status, data_payload, duration_sec=None):
 # --- Configuração Inicial ---
 st.set_page_config(
     page_title="StoryVis",
+    page_icon="📊",
     layout="wide"
 )
 
@@ -69,18 +70,18 @@ st.set_page_config(
 col_title, col_popover = st.columns([10, 1])
 
 with col_title:
-    st.title("StoryVis")
+    st.title("StoryVis V1.0")
 
-with col_popover:
-    popover = st.popover("🧑‍💻", help="Configurações")
+# with col_popover:
+#     popover = st.popover("🧑‍💻", help="Configurações")
     
-    with popover:
-        st.subheader("Configuração da Sessão")
-        st.text_input(
-            "Nome do Participante (Obrigatório)",
-            key="participant_name", 
-            placeholder="Ex: Ana Silva"
-        )
+#     with popover:
+#         st.subheader("Configuração da Sessão")
+#         st.text_input(
+#             "Nome do Participante (Obrigatório)",
+#             key="participant_name", 
+#             placeholder="Ex: Ana Silva"
+#         )
         # st.divider()
         # st.subheader("Galeria de Visualizações")
         # st.caption("Clique para forçar um tipo de gráfico.")
@@ -121,6 +122,13 @@ with st.sidebar:
             "ollama":   "⚪️ Ollama (Local)",
         }[x]
     )
+    st.divider()
+    st.header("3. Participante")
+    st.text_input(
+            "Nome do Participante (Obrigatório)",
+            key="participant_name", 
+            placeholder="Ex: Ana Silva"
+        )
     st.divider()
     if st.button("Limpar Conversa", type="primary"):
         st.session_state["messages"] = [
@@ -284,7 +292,7 @@ if prompt := st.chat_input("Descreva o gráfico que você quer..."):
                             "evaluation_report": report,
                             "viz_plan_json": viz_plan_str,
                             # Adiciona as métricas de token/uso
-                            "token_usage": result.token_usage if hasattr(result, 'token_usage') else None
+                            #"token_usage": result.token_usage if hasattr(result, 'token_usage') else None
                         }
                         save_log(participant_name, llm_provider, full_prompt, "SUCCESS", log_data, duration_sec=duration_sec)
                         # -----------------------------
@@ -312,7 +320,7 @@ if prompt := st.chat_input("Descreva o gráfico que você quer..."):
                     log_data = {
                         "error_message": str(e),
                         "raw_output": raw_output_on_error,
-                        "token_usage": token_usage_on_error
+                        #"token_usage": token_usage_on_error
                     }
                     save_log(participant_name, llm_provider, full_prompt, "ERROR", log_data, duration_sec=duration_sec)
                     # ---------------------------

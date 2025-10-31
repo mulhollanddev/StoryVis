@@ -55,7 +55,7 @@ def LLMRequest(request: str) -> LLM:
         )
     elif request == "ollama":
         llm = LLM(
-            model="ollama/qwen3-coder:480b-cloud",
+            model="ollama/llama3",
             base_url="http://localhost:11434",
             temperature=0.7
         )
@@ -201,5 +201,6 @@ class StoryVisCrew:
             manager_llm=self.llm,        # o gerente usa o mesmo modelo
             manager_agent=self.viz_manager(),  # agente gerente que supervisiona
             verbose=True,
+            #knowledge_sources=[pdf_tool]
         )
 
