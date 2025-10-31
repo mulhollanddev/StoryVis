@@ -18,3 +18,5 @@ Thumbs.db
 
 # Ignora o PDF grande do RAG
 knowledge/storytellingcomdados.pdf
+
+logs/

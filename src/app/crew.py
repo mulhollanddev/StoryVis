@@ -55,7 +55,7 @@ def LLMRequest(request: str) -> LLM:
         )
     elif request == "ollama":
         llm = LLM(
-            model="ollama/llama3",
+            model="ollama/qwen3-coder:480b-cloud",
             base_url="http://localhost:11434",
             temperature=0.7
         )

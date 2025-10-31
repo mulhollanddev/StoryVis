@@ -1,0 +1,21 @@
+# .dockerignore
+
+# Git
+.git/
+.gitignore
+
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Arquivos de segredo
+.env
+*.env
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Banco de dados vetorial local (se existir)
+storyvis_rag_collection/
