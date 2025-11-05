@@ -25,7 +25,7 @@ st.set_page_config(page_title="StoryVis", layout="wide")
 
 # --- TÍTULO (Bloco Popover REMOVIDO) ---
 # O 'col_popover' foi removido para simplificar a UI.
-st.title("StoryVis")
+st.title("StoryVis 2.0")
 # --- FIM DA MUDANÇA ---
         
 
