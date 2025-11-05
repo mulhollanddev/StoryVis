@@ -1,25 +1,23 @@
 # src/app/crew.py
 # -----------------
+# (Versão Refatorada - StoryVis 2.0 Hierárquico)
+
 import os
 from crewai import Agent, Crew, Process, Task, LLM
 from crewai.project import CrewBase, agent, crew, task
 from dotenv import load_dotenv
 
-# 1. O RAG agora usa 'Knowledge' (importado de 'crewai')
+# Imports de Ferramentas (corrigidos)
 from crewai import Knowledge 
-
-# 2. As Ferramentas (Tools) e Fontes (Sources) vêm de 'crewai_tools'
-# 'KnowledgeBaseTool' foi substituída por 'RagTool'
 from crewai_tools import FileReadTool, RagTool
 from crewai.knowledge.source.pdf_knowledge_source import PDFKnowledgeSource
 
 
-# Importa a ferramenta customizada
-from .tools.StreamlitAltairChartsTools import StreamlitAltairChartsTools
+# Importa a ferramenta customizada (placeholder)
+from .tools.StreamlitAltairChartsTools import StreamlitAltairChartsTools 
 
-# Importação dos modelos Pydantic
-from .models import ChartOutput, AnalysisBrief, VizPlan
-
+# --- IMPORTAÇÃO DOS NOVOS MODELOS Pydantic ---
+from .models import ChartOutput, AnalysisBrief, DashboardPlan
 
 # --- Carregar Variáveis de Ambiente ---
 load_dotenv()
@@ -27,8 +25,13 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY") 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-#pdf_tool = PDFKnowledgeSource(file_paths=["ChartStreamlit.md"])
+# --- Caminhos Absolutos (corrigido) ---
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CONFIG_DIR = os.path.join(_BASE_DIR, 'config')
+AGENTS_CONFIG_PATH = os.path.join(_CONFIG_DIR, 'agents.yaml')
+TASKS_CONFIG_PATH = os.path.join(_CONFIG_DIR, 'tasks.yaml')
 
+# --- Função LLMRequest (corrigida) ---
 def LLMRequest(request: str) -> LLM:
     """Seleciona e configura o LLM com base na escolha do usuário."""
     if request == "gemini":
@@ -66,56 +69,46 @@ def LLMRequest(request: str) -> LLM:
 
 @CrewBase
 class StoryVisCrew:
-    """Crew para o sistema StoryVis"""
-    agents_config = "config/agents.yaml"
-    tasks_config  = "config/tasks.yaml"
+    """Crew para o sistema StoryVis 2.0 (Hierárquico)"""
+    agents_config = AGENTS_CONFIG_PATH
+    tasks_config = TASKS_CONFIG_PATH
 
     def __init__(self, llm_choice: str = "gemini"):
-        """
-        Inicializa a crew com o LLM escolhido e configura as ferramentas.
-        """
         self.llm = LLMRequest(llm_choice)
         
+        # Ferramenta para o Analista de Dados
         self.file_read_tool = FileReadTool()
         
+        # Ferramenta para o Arquiteto (RAG Teórico)
         pdf_path = "storytellingcomdados.pdf" 
-        
         pdf_source = PDFKnowledgeSource(file_paths=[pdf_path])
-        
-        knowledge = Knowledge(
+        knowledge_teorico = Knowledge(
             sources=[pdf_source],
-            collection_name="storyvis_rag_collection" 
+            collection_name="storyvis_teoria_rag" 
         )
-                        
-        self.rag_tool = RagTool(knowledge=knowledge)
+        self.rag_tool_teoria = RagTool(knowledge=knowledge_teorico)
         
-        self.altair_tool = StreamlitAltairChartsTools()
+        # Ferramenta para o Gerador (RAG Técnico)
+        # (Idealmente, 'knowledge/altair_docs.pdf' ou similar)
+        # Vamos usar a ferramenta placeholder por enquanto
+        self.rag_tool_tecnica = StreamlitAltairChartsTools()
 
 
-    # --- Agentes (Com ferramentas atualizadas) ---
+    # --- Agentes (Trabalhadores) ---
     @agent
-    def viz_manager(self) -> Agent:
-        """Agente gerente que supervisiona todos os outros."""
+    def data_analyst(self) -> Agent:
         return Agent(
-            config=self.agents_config["viz_manager"],
-            llm=self.llm,
-            verbose=True
-        )
-    
-    @agent
-    def input_analyst(self) -> Agent:
-        return Agent(
-            config=self.agents_config["input_analyst"],
-            tools=[self.file_read_tool], # Correto
+            config=self.agents_config["data_analyst"],
+            tools=[self.file_read_tool], 
             llm=self.llm,
             verbose=True
         )
 
     @agent
-    def viz_planner(self) -> Agent:
+    def dashboard_architect(self) -> Agent:
         return Agent(
-            config=self.agents_config["viz_planner"],
-            tools=[self.rag_tool], # <--- CORRIGIDO
+            config=self.agents_config["dashboard_architect"],
+            tools=[self.rag_tool_teoria],
             llm=self.llm,
             verbose=True
         )
@@ -124,83 +117,115 @@ class StoryVisCrew:
     def viz_generator(self) -> Agent:
         return Agent(
             config=self.agents_config["viz_generator"],
-            tools=[self.altair_tool], # Correto
+            tools=[self.rag_tool_tecnica],
             llm=self.llm,
-            verbose=True
+            verbose=True,
         )
     
     @agent
-    def viz_evaluator(self) -> Agent:
+    def narrative_generator(self) -> Agent:
         return Agent(
-            config=self.agents_config["viz_evaluator"],
-            tools=[self.rag_tool], # <--- CORRIGIDO
+            config=self.agents_config["narrative_generator"],
+            tools=[], # Não precisa de ferramentas, só de contexto
             llm=self.llm,
-            verbose=True,
-            #output_pydantic=ChartOutput
+            verbose=True
         )
 
-    # --- Tarefas ---
+    # --- Agente Gerente ---
+    @agent
+    def viz_manager(self) -> Agent:
+        """Define o agente gerente do projeto."""
+        return Agent(
+            config=self.agents_config["viz_manager"],
+            llm=self.llm,
+            verbose=True
+        )
+
+    # --- Tarefas (SEM 'context' e com Pydantic) ---
+    
     @task
-    def task_analyze_input(self) -> Task:
+    def task_analyze_data(self) -> Task:
+        """Tarefa de análise de dados."""
         return Task(
-            config=self.tasks_config["task_analyze_input"],
-            agent=self.input_analyst(),
+            config=self.tasks_config["task_analyze_data"],
+            agent=self.data_analyst(),
             output_pydantic=AnalysisBrief
         )
 
     @task
-    def task_plan_visualization(self) -> Task:
+    def task_plan_dashboard(self) -> Task:
+        """Tarefa de planejamento do dashboard."""
         return Task(
-            config=self.tasks_config["task_plan_visualization"],
-            agent=self.viz_planner(),
-            context=[self.task_analyze_input()],
-            output_pydantic=VizPlan
+            config=self.tasks_config["task_plan_dashboard"],
+            agent=self.dashboard_architect(),
+            output_pydantic=DashboardPlan
+            # 'context' é removido; o gerente vai passar o AnalysisBrief
         )
 
     @task
-    def task_generate_code(self) -> Task:
+    def task_generate_viz_json(self) -> Task:
+        """Tarefa de geração de JSON do Altair."""
         return Task(
-            config=self.tasks_config["task_generate_code"],
-            agent=self.viz_generator(),
-            context=[
-                self.task_plan_visualization(),
-                self.task_analyze_input() 
-            ]
+            config=self.tasks_config["task_generate_viz_json"],
+            agent=self.viz_generator()
+            # 'context' é removido; o gerente vai passar o DashboardPlan
+            # A saída é uma string JSON, então Pydantic não é necessário aqui,
+            # mas sim no output final da crew.
         )
 
     @task
-    def task_evaluate_and_refine(self) -> Task:
+    def task_generate_narrative(self) -> Task:
+        """Tarefa de geração de narrativa."""
         return Task(
-            config=self.tasks_config["task_evaluate_and_refine"],
-            agent=self.viz_evaluator(),
-            context=[
-                self.task_generate_code(),
-                self.task_plan_visualization()
-            ],
-            # output_pydantic=ChartOutput
+            config=self.tasks_config["task_generate_narrative"],
+            agent=self.narrative_generator()
+            # 'context' é removido; o gerente vai passar o DashboardPlan
+        )
+        
+    # --- Tarefa Final (Agregadora) ---
+    # Precisamos de uma tarefa final para o gerente "forçar"
+    # a montagem do ChartOutput Pydantic
+    @task
+    def task_assemble_output(self) -> Task:
+        """
+        Tarefa final, executada pelo gerente, para montar o ChartOutput.
+        Esta tarefa recebe o JSON do viz_generator e a Narrativa do 
+        narrative_generator e os combina no Pydantic final.
+        """
+        return Task(
+            description="Montar o pacote final 'ChartOutput' para o usuário. "
+                        "Combine o 'final_code' (a string JSON do Altair do viz_generator) "
+                        "e o 'evaluation_report' (a string Markdown do narrative_generator).",
+            expected_output="O objeto Pydantic 'ChartOutput' final e completo.",
+            agent=self.viz_manager(),
+            output_pydantic=ChartOutput
+            # O gerente vai garantir que esta tarefa receba o contexto 
+            # de task_generate_viz_json e task_generate_narrative
         )
 
-    # --- Crew  ---
+
+    # --- Crew (MODO HIERÁRQUICO) ---
     @crew
     def crew(self) -> Crew:
         """Cria e configura a crew do StoryVis (modo hierárquico)."""
         return Crew(
             agents=[
-                self.input_analyst(),
-                self.viz_planner(),
+                # A lista de 'agents' contém APENAS os trabalhadores
+                self.data_analyst(),
+                self.dashboard_architect(),
                 self.viz_generator(),
-                self.viz_evaluator()
+                self.narrative_generator()
             ],
             tasks=[
-                self.task_analyze_input(),
-                self.task_plan_visualization(),
-                self.task_generate_code(),
-                self.task_evaluate_and_refine()
+                # A lista de 'tasks' contém todas as tarefas disponíveis
+                self.task_analyze_data(),
+                self.task_plan_dashboard(),
+                self.task_generate_viz_json(),
+                self.task_generate_narrative(),
+                self.task_assemble_output() # A tarefa final de montagem
             ],
             process=Process.hierarchical,
-            manager_llm=self.llm,        # o gerente usa o mesmo modelo
-            manager_agent=self.viz_manager(),  # agente gerente que supervisiona
-            verbose=True,
-            #knowledge_sources=[pdf_tool]
+            manager_llm=self.llm,
+            manager_agent=self.viz_manager(), # O gerente supervisiona
+            verbose=True
         )
-

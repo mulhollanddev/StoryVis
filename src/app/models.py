@@ -1,19 +1,19 @@
 # src/app/models.py
 # -----------------
-# Define os modelos de dados Pydantic usados para validação de entrada/saída
-# dos LLMs e para a resposta final da API.
+# Define os modelos de dados Pydantic usados para validação e comunicação
+# entre os agentes (contratos de dados) e para a saída final da crew.
 
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
 # -----------------------------------------------------------
-# Modelos Internos (Usados para comunicação entre Agentes)
+# Modelo 1: Saída do 'data_analyst'
 # -----------------------------------------------------------
 
 class AnalysisBrief(BaseModel):
     """
-    Modelo para o "Analysis Brief" (output da task_analyze_input).
-    Estrutura os dados analisados e a intenção do usuário.
+    Pacote de dados do 'data_analyst' para o 'dashboard_architect'.
+    Contém os dados limpos e o resumo estatístico.
     """
     status_validacao: bool = Field(
         ...,
@@ -21,7 +21,7 @@ class AnalysisBrief(BaseModel):
     )
     schema_dados: Dict[str, str] = Field(
         ...,
-        description="Um dicionário mapeando nome da coluna ao seu tipo de dado (ex: {'coluna_A': 'nominal'})."
+        description="Dicionário mapeando nome da coluna ao seu tipo (ex: {'Vendas': 'quantitative'})."
     )
     resumo_estatistico: str = Field(
         ...,
@@ -29,87 +29,95 @@ class AnalysisBrief(BaseModel):
     )
     intencao_clarificada: str = Field(
         ...,
-        description="A intenção do usuário para a visualização, clarificada pelo agente."
+        description="A interpretação do agente sobre o que o usuário quer fazer (ex: 'Comparar Vendas por Região')."
     )
-    dataframe_head_json: str = Field(
+    # Os dados limpos, prontos para serem embutidos no JSON do Altair
+    dados_limpos_json: str = Field(
         ...,
-        description="Amostra (head) do dataframe, serializada como uma string JSON."
+        description="Os dados limpos serializados como uma string JSON (formato 'records')."
     )
 
 
-class VizAxis(BaseModel):
-    """Sub-modelo para definir um eixo (X ou Y) no VizPlan."""
-    field: str = Field(..., description="O nome da coluna (campo) a ser usada no eixo.")
+# -----------------------------------------------------------
+# Modelo 2: Saída do 'dashboard_architect'
+# -----------------------------------------------------------
+
+class VizEncoding(BaseModel):
+    """Sub-modelo para definir um eixo (X, Y) ou canal (Cor, Tooltip)."""
+    field: str = Field(..., description="O nome da coluna (campo) a ser usada.")
     type: str = Field(..., description="O tipo de dado Altair (ex: 'nominal', 'quantitative', 'temporal').")
     title: Optional[str] = Field(None, description="O título customizado para o eixo.")
 
-class VizColor(BaseModel):
-    """Sub-modelo para definir a codificação de cor no VizPlan."""
-    field: str = Field(..., description="O nome da coluna (campo) a ser usada para a cor.")
-    type: str = Field(..., description="O tipo de dado Altair (ex: 'nominal', 'quantitative').")
-    title: Optional[str] = Field(None, description="O título customizado para a legenda de cor.")
+class VizInteraction(BaseModel):
+    """Sub-modelo para definir uma interação (filtro, seleção)."""
+    type: str = Field(..., description="Tipo de interação (ex: 'brushing', 'dropdown_filter').")
+    name: str = Field(..., description="Nome da seleção (ex: 'filtro_regiao').")
+    field: Optional[str] = Field(None, description="Campo ao qual o filtro se aplica.")
 
+class VizComponent(BaseModel):
+    """Sub-modelo para definir um único gráfico dentro do dashboard."""
+    title: str = Field(..., description="O título para este gráfico específico.")
+    chart_type: str = Field(..., description="O 'mark' do Altair (ex: 'bar', 'line', 'point').")
+    x_axis: VizEncoding
+    y_axis: VizEncoding
+    color: Optional[VizEncoding] = None
+    tooltip: List[str] = Field(default_factory=list, description="Campos para o tooltip.")
 
-class VizPlan(BaseModel):
+class DashboardPlan(BaseModel):
     """
-    Modelo para o "VizPlan" (output da task_plan_visualization).
-    Define a especificação declarativa completa para o gráfico Altair.
+    A 'planta' (blueprint) do 'dashboard_architect' para o 'viz_generator'.
+    Descreve um dashboard completo com múltiplos gráficos e interações.
     """
-    chart_type: str = Field(
-        ..., 
-        description="O tipo principal de gráfico (ex: 'bar', 'line', 'scatter', 'heatmap')."
+    dashboard_title: str = Field(..., description="O título principal para todo o dashboard.")
+    
+    # Suporta "Visualização Composta"
+    componentes: List[VizComponent] = Field(
+        ...,
+        description="Uma lista de todos os gráficos que compõem o dashboard."
     )
-    title: str = Field(
-        ..., 
-        description="O título narrativo para o gráfico."
+    
+    # Suporta "Filtros Dinâmicos"
+    interacoes: Optional[List[VizInteraction]] = Field(
+        None,
+        description="Uma lista de interações (filtros) que conectam os gráficos."
     )
-    x_axis: VizAxis = Field(
-        ..., 
-        description="A definição do eixo X."
+    layout: str = Field(
+        "vconcat",
+        description="Como organizar os componentes (ex: 'vconcat', 'hconcat')."
     )
-    y_axis: VizAxis = Field(
-        ..., 
-        description="A definição do eixo Y."
+    justificativa: str = Field(
+        ...,
+        description="A explicação (XAI) do Arquiteto sobre POR QUE este design foi escolhido."
     )
-    color: Optional[VizColor] = Field(
-        None, 
-        description="A definição (opcional) da codificação de cor."
-    )
-    tooltip: List[str] = Field(
-        default_factory=list, 
-        description="Lista de colunas a serem exibidas no tooltip interativo."
-    )
-    interactive: bool = Field(
-        True, 
-        description="Flag para habilitar interações (zoom, pan)."
-    )
-    justification: str = Field(
-        ..., 
-        description="A justificativa (baseada em 'Storytelling com Dados') para a escolha deste gráfico."
-    )
+
 
 # -----------------------------------------------------------
-# Modelo de Saída (Usado para a resposta da API)
+# Modelo 3: Saída Final da Crew (Montado pelo 'viz_manager')
 # -----------------------------------------------------------
 
 class ChartOutput(BaseModel):
     """
-    Define o modelo de saída final da API (output da task_evaluate_and_refine).
-    Este é o objeto retornado pelo endpoint /gerar-grafico.
+    Define o pacote de entrega final da Crew para o Streamlit (app.py).
     """
+    
+    # --- A MUDANÇA CRÍTICA ---
     final_code: str = Field(
         ...,
-        description="O bloco de código Python (usando Altair) final e executável para gerar o gráfico.",
-        json_schema_extra={"example": "import altair as alt\n\nchart = alt.Chart(df).mark_bar()..."}
+        description="A especificação JSON COMPLETA do Altair (NÃO é código Python). "
+                    "Esta string JSON é usada diretamente com 'alt.Chart.from_json()'.",
+        json_schema_extra={"example": "{ \"data\": ..., \"mark\": \"bar\", ... }"}
     )
+    # --- FIM DA MUDANÇA ---
+    
     evaluation_report: str = Field(
         ...,
-        description="Relatório de avaliação (em markdown) com sugestões de refinamento baseadas no RAG.",
-        json_schema_extra={"example": "Avaliação: O gráfico atende aos requisitos. Sugestão: Mover a legenda..."}
+        description="A narrativa em Markdown (do 'narrative_generator') explicando o "
+                    "dashboard para o usuário.",
+        json_schema_extra={"example": "# Análise do seu Dashboard\n\nNotei que..."}
     )
     
-    # Opcional: Incluir o VizPlan para depuração no frontend
     viz_plan_json: Optional[str] = Field(
         None,
-        description="O VizPlan (serializado como string JSON) que foi usado para gerar o código."
+        description="O 'DashboardPlan' original (serializado como string JSON) "
+                    "usado para gerar o gráfico, para fins de log e debug."
     )

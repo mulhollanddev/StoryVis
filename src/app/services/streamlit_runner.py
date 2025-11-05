@@ -1,7 +1,8 @@
 # src/app/services/streamlit_runner.py
 # ------------------------------------
-# Este serviço contém a lógica principal de execução da crew
-# e o "Plano C" (parser de Regex) para lidar com LLMs teimosos.
+# (Versão Revertida - "Plano C" Robusto)
+# Esta versão espera CÓDIGO PYTHON da crew e usa
+# Regex e exec() para renderizar.
 
 import re
 import time
@@ -18,7 +19,7 @@ def run_storyvis_flow(
     full_prompt: str, 
     file_path: str,
     participant_name: str,
-    df: pd.DataFrame # O DataFrame carregado, necessário para o exec()
+    df: pd.DataFrame # O DataFrame carregado, OBRIGATÓRIO para o exec()
 ):
     """
     Executa o fluxo completo da crew (Kickoff + Parse Regex + Exec)
@@ -48,11 +49,21 @@ def run_storyvis_flow(
         plan_match = re.search(r"""(?s)(?:viz_plan_json=|"viz_plan_json":\s*["'])(\{.*\})""", raw_output)
 
         if not code_match or not report_match or not plan_match:
-            raise ValueError("Não foi possível extrair (Regex) os campos 'final_code', 'evaluation_report' ou 'viz_plan_json' da saída bruta.")
-
-        final_code = code_match.group(1).strip().strip("'\"")
-        report = report_match.group(1).strip().strip("'\"")
-        viz_plan_str = plan_match.group(1).strip().strip("'\"")
+            # Fallback se o Pydantic (Plano A) falhou mas retornou algo
+            if hasattr(result, 'pydantic') and isinstance(result.pydantic, ChartOutput):
+                 print("--- [Debug Runner] Pydantic SUCESSO, usando Pydantic.")
+                 chart_output = result.pydantic
+                 final_code = chart_output.final_code
+                 report = chart_output.evaluation_report
+                 viz_plan_str = chart_output.viz_plan_json
+            else:
+                 raise ValueError("Não foi possível extrair (Regex) os campos 'final_code', 'evaluation_report' ou 'viz_plan_json' da saída bruta.")
+        else:
+            # Sucesso do Regex
+            print("--- [Debug Runner] Parse Regex SUCESSO. ---")
+            final_code = code_match.group(1).strip().strip("'\"")
+            report = report_match.group(1).strip().strip("'\"")
+            viz_plan_str = plan_match.group(1).strip().strip("'\"")
         
         # Limpeza Agressiva v5 (como estava no app.py)
         final_code = final_code.replace('\\"', '"').replace("\\'", "'")
@@ -77,8 +88,9 @@ def run_storyvis_flow(
         print(f"Erro: {e}")
         raise TypeError(f"A saída da crew não pôde ser parseada com Regex.\nSaída Bruta do LLM: {raw_output}")
 
-    # --- 5. Execução do Código Gerado ---
+    # --- 5. Execução do Código Gerado (com exec()) ---
     chart_object = None
+    # 'df' (o DataFrame) é injetado aqui!
     exec_globals = {'alt': alt, 'pd': pd, 'df': df, 'st': st}
     exec_locals = {} 
     
@@ -90,10 +102,18 @@ def run_storyvis_flow(
         if fallback_matches: chart_var_name = fallback_matches[-1]
     
     final_code_cleaned = re.sub(r"st\.altair_chart\(.*\)", "", final_code)
+    # Remove imports que o LLM possa ter alucinado
+    final_code_cleaned = re.sub(r"import .*\n", "", final_code_cleaned)
+    
     exec_code_block = f"{final_code_cleaned}\n\nchart = {chart_var_name}"
     
-    exec(exec_code_block, exec_globals, exec_locals)
-    chart_object = exec_locals.get('chart')
+    try:
+        exec(exec_code_block, exec_globals, exec_locals)
+        chart_object = exec_locals.get('chart')
+    except Exception as e:
+        print(f"--- ERRO NO EXEC() ---")
+        print(f"Código que falhou:\n{exec_code_block}")
+        raise SyntaxError(f"Erro de sintaxe no código gerado pelo LLM: {e}")
     
     # --- Fim da Execução ---
     
@@ -105,7 +125,7 @@ def run_storyvis_flow(
         return {
             "status": "SUCCESS",
             "chart_object": chart_object,
-            "final_code": final_code,
+            "final_code": final_code, # Retorna o código Python (para log)
             "report": report,
             "viz_plan_str": viz_plan_str,
             "duration_sec": duration_sec,

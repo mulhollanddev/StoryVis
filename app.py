@@ -46,10 +46,10 @@ with st.sidebar:
         "Escolha o modelo:",
         options=["gemini", "openai", "deepseek", "ollama"], index=0,
         format_func=lambda x: {
-            "openai":   "🟢 OpenAI (GPT-4o-mini)",
-            "gemini":   "🔵 Google Gemini Flash",
-            "deepseek": "🟣 DeepSeek (via OpenRouter)",
-            "ollama":   "⚪️ Ollama (Local)",
+            "openai":   "🟢 OpenAI",
+            "gemini":   "🔵 Gemini",
+            "deepseek": "🟣 DeepSeek",
+            "ollama":   "⚪️ Ollama",
         }[x]
     )
     st.divider()
@@ -124,7 +124,7 @@ if prompt := st.chat_input("Converse comigo ou descreva o gráfico que você que
                     with open(file_path, "wb") as f: f.write(uploaded_file.getbuffer())
                     
                     df = None
-                    if file_path.endswith('.csv'): df = pd.read_csv(file_path)
+                    if file_path.endswith('.csv'): df = pd.read_csv(file_path, thousands='.', decimal=',')
                     elif file_path.endswith('.xlsx'): df = pd.read_excel(file_path)
                     if df is None: raise ValueError("Não foi possível ler o arquivo como DataFrame.")
 
