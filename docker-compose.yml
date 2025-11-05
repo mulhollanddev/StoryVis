@@ -1,19 +1,37 @@
+# docker-compose.yml
+version: '3.8'
+
 services:
+  # Serviço Ollama
   ollama:
     image: ollama/ollama:latest
+    # Mapeia a porta 11434 do contêiner para a porta 11434 do host
+    # Isso permite que seu host acesse o Ollama diretamente, se necessário.
+    # E é como o serviço 'app' vai se conectar.
     ports:
       - "11434:11434"
+    # Monta um volume para persistir os modelos Ollama
+    # Isso evita ter que baixar os modelos toda vez que o contêiner for reiniciado.
     volumes:
       - ollama_models:/root/.ollama
 
+  # Serviço da sua Aplicação RAG
   app:
-    build: .
-    ports:
-      - "8501:8501"
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
+    build:
+      context: . # O contexto é o diretório atual onde o docker-compose.yml está
+      dockerfile: Dockerfile # Usa o Dockerfile no diretório atual
+    # Faz com que o serviço 'app' dependa do serviço 'ollama'
+    # Isso garante que 'ollama' seja iniciado antes de 'app'.
     depends_on:
       - ollama
+    # Define variáveis de ambiente para a aplicação
+    environment:
+      # Define o host do Ollama usando o nome do serviço Docker Compose
+      OLLAMA_HOST: http://ollama:11434
+    # Mapeia o diretório de dados (onde está o PDF e será salvo o Chroma DB)
+    # para um volume para persistência.
 
+# Define os volumes para persistência
 volumes:
   ollama_models:
+  app_chroma_db:
