@@ -30,6 +30,7 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _CONFIG_DIR = os.path.join(_BASE_DIR, 'config')
 AGENTS_CONFIG_PATH = os.path.join(_CONFIG_DIR, 'agents.yaml')
 TASKS_CONFIG_PATH = os.path.join(_CONFIG_DIR, 'tasks.yaml')
+BASE_URL = os.getenv("BASE_URL")
 
 # --- Função LLMRequest (corrigida) ---
 def LLMRequest(request: str) -> LLM:
@@ -46,20 +47,19 @@ def LLMRequest(request: str) -> LLM:
             # model="openrouter/deepseek/deepseek-r1",
             # base_url="https://openrouter.ai/api/v1", deepseek-v3.1:671b-cloud
             model="ollama/deepseek-v3.1:671b-cloud",
-            base_url="http://localhost:11434",
-            api_key=OPENROUTER_API_KEY,
+            base_url=BASE_URL,
             temperature=0.7
         )
     elif request == "openai":
         llm = LLM(
             model="ollama/gpt-oss:120b-cloud",
-            api_key=OPENAI_API_KEY,
+            base_url=BASE_URL,
             temperature=0.7
         )
     elif request == "ollama":
         llm = LLM(
             model="ollama/llama3",
-            base_url="http://localhost:11434",
+            base_url=BASE_URL,
             temperature=0.7
         )
     else:
