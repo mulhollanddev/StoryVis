@@ -63,7 +63,7 @@ def LLMRequest(request: str) -> LLM:
         raise ValueError(f"Modelo LLM desconhecido ou não configurado: {request}")
     
 
-    resp = request.get(f"{BASE_URL}/api/tags", timeout=3)
+    resp = request.get(f"http://localhost:11434/api/tags", timeout=3)
     print(">>> Resposta do servidor Ollama:", resp)
     return llm
 
