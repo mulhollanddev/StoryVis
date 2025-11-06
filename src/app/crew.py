@@ -62,6 +62,9 @@ def LLMRequest(request: str) -> LLM:
     else:
         raise ValueError(f"Modelo LLM desconhecido ou não configurado: {request}")
     
+
+    resp = request.get(f"{BASE_URL}/api/tags", timeout=3)
+    print(">>> Resposta do servidor Ollama:", resp.text)
     return llm
 
 @CrewBase
