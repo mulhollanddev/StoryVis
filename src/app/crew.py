@@ -31,7 +31,7 @@ TASKS_CONFIG_PATH   = os.path.join(_CONFIG_DIR, 'tasks.yaml')
 
 # Recebe do front a LLM escolhida pelo participante
 
-def LLMRequest(request: str,prompt: str):
+def LLMRequest(request: str):
     import requests
     if request == "openai":
         llm = LLM(
@@ -47,7 +47,7 @@ def LLMRequest(request: str,prompt: str):
         print(">>> Erro ao conectar no Ollama:", e)
 
     # aqui segue o que você já tinha
-    return llm.call(prompt)
+    return llm.call(request)
 
 # def LLMRequest(request: str) -> LLM:
 #     """Seleciona e configura o LLM com base na escolha do usuário."""
