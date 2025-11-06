@@ -6,6 +6,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl gnupg && \
     curl -fsSL https://ollama.com/install.sh | sh && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+    docker pull ollama/ollama:latest
+    docker run -d \                 
+    --name ollama \
+    -p 11434:11434 \
+    -v ollama_models:/root/.ollama \
+    ollama/ollama:latest
 
 # Instala as dependências Python
 COPY requirements.txt .
