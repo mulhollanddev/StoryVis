@@ -53,6 +53,6 @@ def get_chatbot_response(llm_choice: str, chat_history: list, user_prompt: str):
         return response
 
     except Exception as e:
-        print(f"--- ERRO no chat_service.py ---: {e}")
+        print(">>> ", llm)
         # Retorna o erro real para debugarmos
         return f"Desculpe, tive um problema para processar sua mensagem: {e}"
