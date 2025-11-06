@@ -27,7 +27,7 @@ services:
     # Define variáveis de ambiente para a aplicação
     environment:
       # Define o host do Ollama usando o nome do serviço Docker Compose
-      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_HOST: http://ollama:11434 
     # Mapeia o diretório de dados (onde está o PDF e será salvo o Chroma DB)
     # para um volume para persistência.
 
