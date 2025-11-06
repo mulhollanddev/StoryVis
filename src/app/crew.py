@@ -30,58 +30,39 @@ AGENTS_CONFIG_PATH  = os.path.join(_CONFIG_DIR, 'agents.yaml')
 TASKS_CONFIG_PATH   = os.path.join(_CONFIG_DIR, 'tasks.yaml')
 
 # Recebe do front a LLM escolhida pelo participante
-
-def LLMRequest(request: str):
-    import requests
-    if request == "openai":
+def LLMRequest(request: str) -> LLM:
+    """Seleciona e configura o LLM com base na escolha do usuário."""
+    if request == "gemini":
+        llm = LLM(
+            model="gemini/gemini-2.5-flash", 
+            api_key=GEMINI_API_KEY,
+            temperature=0.7
+        )
+    elif request == "deepseek":
+        # deepseek-v3.1:671b-cloud
+        llm = LLM(
+            # model="openrouter/deepseek/deepseek-r1",
+            # base_url="https://openrouter.ai/api/v1", deepseek-v3.1:671b-cloud
+            model="ollama/deepseek-v3.1:671b-cloud",
+            base_url=BASE_URL,
+            temperature=0.7
+        )
+    elif request == "openai":
         llm = LLM(
             model="ollama/gpt-oss:120b-cloud",
             base_url="http://localhost:11434",
             temperature=0.7
         )
-
-    try:
-        resp = requests.get("http://localhost:11434/api/tags", timeout=3)
-        print(">>> Resposta do servidor Ollama:", resp.text)
-    except Exception as e:
-        print(">>> Erro ao conectar no Ollama:", e)
-
-    # aqui segue o que você já tinha
-    return llm.call(request)
-
-# def LLMRequest(request: str) -> LLM:
-#     """Seleciona e configura o LLM com base na escolha do usuário."""
-#     if request == "gemini":
-#         llm = LLM(
-#             model="gemini/gemini-2.5-flash", 
-#             api_key=GEMINI_API_KEY,
-#             temperature=0.7
-#         )
-#     elif request == "deepseek":
-#         # deepseek-v3.1:671b-cloud
-#         llm = LLM(
-#             # model="openrouter/deepseek/deepseek-r1",
-#             # base_url="https://openrouter.ai/api/v1", deepseek-v3.1:671b-cloud
-#             model="ollama/deepseek-v3.1:671b-cloud",
-#             base_url=BASE_URL,
-#             temperature=0.7
-#         )
-#     elif request == "openai":
-#         llm = LLM(
-#             model="ollama/gpt-oss:120b-cloud",
-#             base_url="http://localhost:11434",
-#             temperature=0.7
-#         )
-#     elif request == "ollama":
-#         llm = LLM(
-#             model="ollama/llama3",
-#             base_url=BASE_URL,
-#             temperature=0.7
-#         )
-#     else:
-#         raise ValueError(f"Modelo LLM desconhecido ou não configurado: {request}")
+    elif request == "ollama":
+        llm = LLM(
+            model="ollama/llama3",
+            base_url=BASE_URL,
+            temperature=0.7
+        )
+    else:
+        raise ValueError(f"Modelo LLM desconhecido ou não configurado: {request}")
     
-#     return llm
+    return llm
 
 @CrewBase
 class StoryVisCrew:
