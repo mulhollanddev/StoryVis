@@ -1,7 +1,4 @@
 # src/app/crew.py
-# -----------------
-# (Versão Refatorada - StoryVis 2.0 Hierárquico)
-
 import os
 from crewai import Agent, Crew, Process, Task, LLM
 from crewai.project import CrewBase, agent, crew, task
@@ -21,18 +18,18 @@ from .models import ChartOutput, AnalysisBrief, DashboardPlan
 
 # --- Carregar Variáveis de Ambiente ---
 load_dotenv()
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY") 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY")
+GEMINI_API_KEY      = os.getenv("GOOGLE_API_KEY") 
+OPENAI_API_KEY      = os.getenv("OPENAI_API_KEY")
+BASE_URL            = os.getenv("BASE_URL")
 
-# --- Caminhos Absolutos (corrigido) ---
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_CONFIG_DIR = os.path.join(_BASE_DIR, 'config')
-AGENTS_CONFIG_PATH = os.path.join(_CONFIG_DIR, 'agents.yaml')
-TASKS_CONFIG_PATH = os.path.join(_CONFIG_DIR, 'tasks.yaml')
-BASE_URL = os.getenv("BASE_URL")
+# --- Caminhos Absolutos ---
+_BASE_DIR           = os.path.dirname(os.path.abspath(__file__))
+_CONFIG_DIR         = os.path.join(_BASE_DIR, 'config')
+AGENTS_CONFIG_PATH  = os.path.join(_CONFIG_DIR, 'agents.yaml')
+TASKS_CONFIG_PATH   = os.path.join(_CONFIG_DIR, 'tasks.yaml')
 
-# --- Função LLMRequest (corrigida) ---
+# Recebe do front a LLM escolhida pelo participante
 def LLMRequest(request: str) -> LLM:
     """Seleciona e configura o LLM com base na escolha do usuário."""
     if request == "gemini":
@@ -53,7 +50,7 @@ def LLMRequest(request: str) -> LLM:
     elif request == "openai":
         llm = LLM(
             model="ollama/gpt-oss:120b-cloud",
-            base_url=BASE_URL,
+            base_url="http://localhost:11434",
             temperature=0.7
         )
     elif request == "ollama":
