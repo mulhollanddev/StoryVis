@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl gnupg && \
     curl -fsSL https://ollama.com/install.sh | sh && \
     apt-get clean && rm -rf /var/lib/apt/lists/*\
-    pip install ollama\
+    curl -fsSL https://ollama.com/install.sh | sh\
     ollama serve \
     ollama/ollama:latest
 
