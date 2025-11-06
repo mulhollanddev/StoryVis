@@ -17,7 +17,7 @@ __pycache__/
 Thumbs.db
 
 # Ignora o PDF grande do RAG
-knowledge/storytellingcomdados.pdf
+#knowledge/storytellingcomdados.pdf
 
 logs/
 tests/
