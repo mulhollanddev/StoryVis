@@ -112,14 +112,12 @@ tab_dados, tab_dash, tab_insights = st.tabs([
 # -------------------------------------------------------
 with tab_dados:
     st.subheader("Preparação dos Dados")
-    col_nome, col_upload = st.columns([1, 2], gap="medium")
     
-    with col_nome:
-        nome = st.text_input("👤 Nome do Participante", placeholder="Ex: Ana Silva")
-        if nome: st.session_state["nome_participante"] = nome
     
-    with col_upload:
-        uploaded_file = st.file_uploader("📂 Arquivo de Dados", type=["csv", "xlsx", "xls"])
+    nome = st.text_input("👤 Nome do Participante", placeholder="Ex: Ana Silva")
+    if nome: st.session_state["nome_participante"] = nome
+    
+    uploaded_file = st.file_uploader("📂 Arquivo de Dados", type=["csv", "xlsx", "xls"])
 
     if uploaded_file:
         if "arquivo_cache" not in st.session_state or st.session_state["arquivo_cache"] != uploaded_file.name:
@@ -149,12 +147,8 @@ with tab_dash:
     st.subheader("Painel Visual & Editor")
 
     if "df_final" in st.session_state:
-        # Prompt
-        p_col, b_col = st.columns([4, 1])
-        with p_col:
-            instrucao = st.text_input("O que você quer visualizar?", placeholder="Ex: Gráfico de barras de Vendas por Mês...")
-        with b_col:
-            gerar = st.button("🚀 Gerar com IA", type="primary", use_container_width=True)
+        instrucao = st.text_input("Gostaria de visualizar mais algum gráfico?", placeholder="Ex: Gráfico de barras de Vendas por Mês...")
+        gerar = st.button("🚀 Gerar com IA", type="primary", use_container_width=True)
 
         # Lógica IA
         if gerar:
