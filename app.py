@@ -39,34 +39,54 @@ def salvar_temp_csv(df):
         return tmp.name
 
 def limpar_codigo_ia(texto_bruto):
-    """Limpa o código removendo textos extras e comandos obsoletos."""
+    """Limpa o código removendo textos extras do robô."""
     if not texto_bruto: return ""
-    
-    # 1. Extrai o conteúdo das crases
     padrao = r"```(?:python)?\s*(.*?)```"
     match = re.search(padrao, texto_bruto, re.DOTALL)
-    if match: 
-        codigo = match.group(1).strip()
-    else:
-        # Fallback se não tiver crases
-        linhas = texto_bruto.split('\n')
-        linhas_limpas = []
-        for linha in linhas:
-            l = linha.lower().strip()
-            if l.startswith(("espero que", "hope this", "segue o", "aqui está", "qualquer dúvida")):
-                break
-            linhas_limpas.append(linha)
-        codigo = "\n".join(linhas_limpas).strip()
+    if match: return match.group(1).strip()
+    
+    linhas = texto_bruto.split('\n')
+    linhas_limpas = []
+    for linha in linhas:
+        l = linha.lower().strip()
+        if l.startswith(("espero que", "hope this", "segue o", "aqui está", "qualquer dúvida")):
+            break
+        linhas_limpas.append(linha)
+    return "\n".join(linhas_limpas).strip()
 
-    # 2. CORREÇÃO "NA MARRA" DO CACHE
-    # Se o robô teimoso colocar @st.cache, a gente comenta a linha.
-    # Isso impede o erro de depreciação sem quebrar a função abaixo dele.
-    codigo = codigo.replace("@st.cache", "# @st.cache (Removido por segurança)")
+def separar_narrativa_codigo(raw_text):
+    """
+    Tenta separar texto e código mesmo que a IA esqueça o separador.
+    """
+    narrativa = ""
+    codigo_sujo = ""
+
+    # 1. Tenta pelo Separador Oficial
+    if "|||SEP|||" in raw_text:
+        parts = raw_text.split("|||SEP|||")
+        narrativa = parts[0].strip()
+        if len(parts) > 1:
+            codigo_sujo = parts[1]
     
-    # Opcional: Remove também tentativas de st.experimental_memo que modelos velhos gostam
-    codigo = codigo.replace("@st.experimental_memo", "# @st.experimental_memo")
-    
-    return codigo
+    # 2. Fallback: Procura por blocos de código markdown
+    elif "```python" in raw_text:
+        # Tudo antes da crase é narrativa
+        parts = raw_text.split("```python")
+        narrativa = parts[0].strip()
+        codigo_sujo = "```python" + parts[1] # Recostura o código
+        
+    # 3. Fallback: Procura pelo import do streamlit
+    elif "import streamlit" in raw_text:
+        idx = raw_text.find("import streamlit")
+        narrativa = raw_text[:idx].strip()
+        codigo_sujo = raw_text[idx:]
+        
+    # 4. Se não achar código, assume que é tudo narrativa
+    else:
+        narrativa = raw_text
+        codigo_sujo = ""
+
+    return narrativa, codigo_sujo
 
 # ===============================================
 # Inicialização de Estado
@@ -123,7 +143,7 @@ with tab_dados:
         st.info("Faça o upload de um arquivo para começar.")
 
 # -------------------------------------------------------
-# ABA 2: DASHBOARD + EDITOR (Onde estava o problema)
+# ABA 2: DASHBOARD + EDITOR
 # -------------------------------------------------------
 with tab_dash:
     st.subheader("Painel Visual & Editor")
@@ -133,6 +153,7 @@ with tab_dash:
         p_col, b_col = st.columns([4, 1])
         with p_col:
             instrucao = st.text_input("O que você quer visualizar?", placeholder="Ex: Gráfico de barras de Vendas por Mês...")
+        with b_col:
             gerar = st.button("🚀 Gerar com IA", type="primary", use_container_width=True)
 
         # Lógica IA
@@ -151,33 +172,29 @@ with tab_dash:
                     result = StoryVisCrew().crew().kickoff(inputs=inputs)
                     raw = result.raw
                     
-                    # Parse e Limpeza
-                    if "|||SEP|||" in raw:
-                        parts = raw.split("|||SEP|||")
-                        narrativa = parts[0].strip()
-                        codigo_sujo = parts[1]
-                    else:
-                        narrativa = "Narrativa integrada."
-                        codigo_sujo = raw[raw.find("import"):] if "import" in raw else ""
-
+                    # --- NOVA LÓGICA DE SEPARAÇÃO INTELIGENTE ---
+                    narrativa, codigo_sujo = separar_narrativa_codigo(raw)
+                    
+                    # Limpeza final do código
                     codigo_limpo = limpar_codigo_ia(codigo_sujo)
 
-                    # --- CORREÇÃO CRÍTICA AQUI ---
-                    # Atualizamos a variável mestre
+                    # Atualiza Estado
                     st.session_state["codigo_final"] = codigo_limpo
                     st.session_state["narrativa_final"] = narrativa
-                    
-                    # FORÇAMOS a atualização do widget de texto (o editor da direita)
-                    # Isso garante que o código NOVO apareça na caixa imediatamente
                     st.session_state["editor_codigo_area"] = codigo_limpo 
                     
                     status.update(label="Gráfico Gerado!", state="complete", expanded=False)
+                    
+                    # Debug Opcional: Se a narrativa vier vazia, avisa
+                    if not narrativa:
+                        st.toast("A IA gerou o gráfico mas não retornou texto.", icon="⚠️")
+                        
                 except Exception as e:
                     st.error(f"Erro na geração: {e}")
 
         st.divider()
 
-        # Layout Dividido: Gráfico (Esq) | Editor (Dir)
+        # Layout Dividido
         col_grafico, col_editor = st.columns([2, 1], gap="medium")
 
         # Esquerda: O Gráfico
@@ -193,22 +210,17 @@ with tab_dash:
             else:
                 st.info("O gráfico aparecerá aqui.")
 
-        # Direita: O Editor de Código
+        # Direita: O Editor
         with col_editor:
             st.markdown("#### 🛠️ Código Fonte")
-            st.caption("Edite o código e clique em Aplicar.")
-            
-            # O Widget Text Area
-            # key="editor_codigo_area" liga este campo à variável que atualizamos lá em cima
             codigo_editado = st.text_area(
                 "Python Script",
-                value=st.session_state["codigo_final"], # Valor inicial (fallback)
+                value=st.session_state["codigo_final"],
                 height=450,
-                key="editor_codigo_area" # Chave fundamental para sincronia
+                key="editor_codigo_area"
             )
             
             if st.button("💾 Aplicar Alterações", use_container_width=True):
-                # Se o usuário editou na mão, salvamos a edição na variável mestre
                 st.session_state["codigo_final"] = codigo_editado
                 st.rerun()
 
@@ -220,8 +232,14 @@ with tab_dash:
 # -------------------------------------------------------
 with tab_insights:
     st.subheader("📝 Narrativa de Negócios")
+    
     if st.session_state["narrativa_final"]:
         with st.container(border=True):
             st.markdown(st.session_state["narrativa_final"])
     else:
-        st.info("A explicação textual da IA aparecerá aqui.")
+        # Mensagem mais amigável
+        st.info("A explicação textual da IA aparecerá aqui após você gerar o dashboard.")
+        
+        # Mostra o que tem no RAW para debug se estiver vazio
+        if "codigo_final" in st.session_state and st.session_state["codigo_final"]:
+             st.caption("(Se você vê código mas não vê texto, a IA pode ter pulado a narrativa desta vez. Tente gerar novamente).")

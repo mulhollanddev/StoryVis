@@ -12,7 +12,7 @@ class StoryVisCrew:
     tasks_config = os.path.join(base_path, 'config', 'tasks.yaml')
 
     llm_fast = LLM(
-        model="groq/llama-3.1-8b-instant",
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
         temperature=0.1,
         api_key=os.getenv("GROQ_API_KEY"),
         base_url="https://api.groq.com/openai/v1"
