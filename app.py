@@ -9,7 +9,7 @@ import re
 # ===============================================
 # Configuração da Página
 # ===============================================
-st.set_page_config(page_title="StoryVis - Editor Vivo", layout="wide", page_icon="📊")
+st.set_page_config(page_title="StoryVis", layout="wide", page_icon="📊")
 
 # --- Importação da Crew ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -79,7 +79,7 @@ if "narrativa_final" not in st.session_state:
 # ===============================================
 # Interface Principal
 # ===============================================
-st.title("📊 StoryVis: Editor & Dashboard Vivo")
+st.title("📊 StoryVis")
 
 tab_dados, tab_dash, tab_insights = st.tabs([
     "✏️ Dados & Configuração", 
