@@ -113,9 +113,8 @@ tab_dados, tab_dash, tab_insights = st.tabs([
 with tab_dados:
     st.subheader("Preparação dos Dados")
     
-    
-    nome = st.text_input("👤 Nome do Participante", placeholder="Ex: Ana Silva")
-    if nome: st.session_state["nome_participante"] = nome
+    #nome = st.text_input("👤 Nome do Participante", placeholder="Ex: Ana Silva")
+    #if nome: st.session_state["nome_participante"] = nome
     
     uploaded_file = st.file_uploader("📂 Arquivo de Dados", type=["csv", "xlsx", "xls"])
 
