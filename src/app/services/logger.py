@@ -5,53 +5,77 @@ from datetime import datetime
 from pinecone import Pinecone
 from dotenv import load_dotenv
 
-# Carrega variáveis
 load_dotenv()
 
-# Configurações
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 INDEX_NAME = os.getenv("PINECONE_INDEX_NAME_LOG")
 NAMESPACE_LOGS = "app-logs" 
 DIMENSION = 1024 
 
 def get_dummy_vector():
-    """
-    Retorna um vetor válido (não-zero) para servir de placeholder.
-    Preenchemos com 0.01 para não ser rejeitado pelo Pinecone.
-    """
     return [0.01] * DIMENSION
 
-def salvar_log_pinecone(usuario, input_usuario, output_ia, status="Sucesso"):
+def salvar_log_pinecone(
+    usuario, 
+    input_usuario, 
+    output_ia, 
+    status="Sucesso", 
+    execution_time=0.0, 
+    terminal_log="",
+    # --- NOVOS PARÂMETROS ESTATÍSTICOS ---
+    dataset_rows=0,
+    dataset_cols=0,
+    data_source="Desconhecido", # 'Demo' ou 'Upload'
+    action_type="Create",       # 'Create' ou 'Append'
+    est_input_tokens=0,         # Estimativa
+    est_output_tokens=0         # Estimativa
+):
     """
-    Salva a interação no Pinecone usando Metadata.
+    Salva logs estatísticos avançados para BI.
     """
     if not PINECONE_API_KEY or not INDEX_NAME:
-        print("⚠️ Configuração do Pinecone ausente. Log não salvo.")
         return False
 
     try:
         pc = Pinecone(api_key=PINECONE_API_KEY)
         index = pc.Index(INDEX_NAME)
 
-        # 1. Cria ID único
         log_id = f"log_{int(time.time())}_{str(uuid.uuid4())[:8]}"
 
-        # 2. Prepara Metadata
+        # Tratamento de logs longos
+        trace_limpo = str(terminal_log)
+        if len(trace_limpo) > 4000:
+            trace_limpo = trace_limpo[:2000] + "\n...[CORTADO]...\n" + trace_limpo[-2000:]
+
         metadata = {
+            # --- BÁSICOS ---
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "usuario": str(usuario),
-            "input_prompt": str(input_usuario),
-            "output_resumo": str(output_ia)[:2000], 
             "status": status,
-            "tipo": "log_sistema"
+            "latency_seconds": float(execution_time),
+            
+            # --- CONTEXTO ---
+            "input_prompt": str(input_usuario),
+            "output_resumo": str(output_ia)[:1000],
+            "crew_trace": trace_limpo,
+            
+            # --- ESTATÍSTICAS DE DADOS (BI) ---
+            "data_rows": int(dataset_rows),
+            "data_cols": int(dataset_cols),
+            "data_source": str(data_source),
+            "action_type": str(action_type),
+            
+            # --- ECONOMIA (TOKENS) ---
+            # Pinecone aceita Int ou Float, ideal para somar depois
+            "tokens_in_est": int(est_input_tokens),
+            "tokens_out_est": int(est_output_tokens),
+            "code_lines": len(str(output_ia).split('\n')),
+            
+            "tipo": "log_sistema_v2"
         }
 
-        # 3. Cria Vetor Válido (Não-Zero)
-        # --- CORREÇÃO AQUI ---
         vector_valido = get_dummy_vector()
-        # ---------------------
 
-        # 4. Upsert no Namespace de Logs
         index.upsert(
             vectors=[(log_id, vector_valido, metadata)],
             namespace=NAMESPACE_LOGS

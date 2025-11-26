@@ -5,13 +5,16 @@ import tempfile
 import os
 import sys
 import re
+import time
+import io
+import contextlib
 
 # ===============================================
 # Configuração da Página
 # ===============================================
-st.set_page_config(page_title="StoryVis", layout="wide", page_icon="📊")
+st.set_page_config(page_title="StoryVis - Analytics & Logs", layout="wide", page_icon="📊")
 
-# --- Importações ---
+# --- Importações Dinâmicas ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # 1. CrewAI
@@ -27,6 +30,7 @@ try:
     LOGGING_ATIVO = True
 except ImportError:
     LOGGING_ATIVO = False
+    # Função dummy para não quebrar o código se o logger falhar
     def salvar_log_pinecone(*args, **kwargs): pass
 
 # ===============================================
@@ -90,27 +94,27 @@ def carregar_demo_inicial():
         "Meta": [1000, 1000, 2500, 2500, 1000, 1000]
     })
     codigo_fake = """
-        import streamlit as st
-        import altair as alt
-        import pandas as pd
+import streamlit as st
+import altair as alt
+import pandas as pd
 
-        # Container para restringir largura
-        c = st.container()
-        with c:
-            st.markdown("### Gráfico Demonstração")
-            chart = alt.Chart(df).mark_bar().encode(
-                x=alt.X('Mês', sort=None),
-                y='Vendas',
-                color='Produto',
-                tooltip=['Mês', 'Produto', 'Vendas']
-            ).interactive()
+# Container para restringir largura e manter estilo
+c = st.container()
+with c:
+    st.markdown("### 📈 Demonstração")
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X('Mês', sort=None),
+        y='Vendas',
+        color='Produto',
+        tooltip=['Mês', 'Produto', 'Vendas']
+    ).interactive()
 
-            st.altair_chart(chart, use_container_width=True)
-        """
+    st.altair_chart(chart, use_container_width=True)
+"""
     narrativa_fake = """
-        ### 🚀 Demonstração Automática
-        Estes são dados de exemplo. Para começar, vá na aba **Dados** e insira seu nome.
-        """
+### 🚀 Demonstração Automática
+Estes são dados de exemplo. Para começar a usar seus dados, vá na aba **Dados** e insira seu nome.
+"""
     return df_fake, codigo_fake, narrativa_fake
 
 # ===============================================
@@ -124,12 +128,11 @@ if "df_final" not in st.session_state:
     st.session_state["editor_codigo_area"] = cod_demo
     st.session_state["modo_demo"] = True
     st.session_state["nome_participante"] = "" 
-    st.session_state["input_add_chart"] = "" # Controle do input de adicionar
 
 # ===============================================
 # Interface Principal
 # ===============================================
-st.title("📊 StoryVis: Dashboard com IA")
+st.title("📊 StoryVis: Analytics com IA")
 
 tab_dados, tab_dash, tab_insights = st.tabs([
     "✏️ Dados & Configuração", 
@@ -159,6 +162,12 @@ with tab_dados:
                 st.session_state["df_final"] = df_loaded.copy()
                 st.session_state["arquivo_cache"] = uploaded_file.name
                 st.session_state["modo_demo"] = False
+                
+                # Limpa estado anterior
+                st.session_state["codigo_final"] = ""
+                st.session_state["narrativa_final"] = ""
+                st.session_state["editor_codigo_area"] = ""
+                
                 st.toast("Arquivo carregado!", icon="✅")
 
     st.divider()
@@ -181,41 +190,57 @@ with tab_dados:
     st.session_state["df_final"] = df_editado
 
 # -------------------------------------------------------
-# ABA 2: DASHBOARD + LOGGING
+# ABA 2: DASHBOARD + MONITORAMENTO
 # -------------------------------------------------------
 with tab_dash:
     st.subheader("Painel Visual")
     
-    # Validação do Nome no topo
     nome_atual = st.session_state.get("nome_participante", "Anônimo").strip()
     if not nome_atual: nome_atual = "Anônimo"
 
     # ===================================================
-    # ÁREA 1: CRIAÇÃO INICIAL (GERAR DO ZERO)
+    # ÁREA 1: CRIAÇÃO INICIAL
     # ===================================================
-    
-    instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
-    
-    if nome_atual != "Anônimo" and nome_atual != "":
-        gerar = st.button("🚀 Gerar dashboard", type="primary", use_container_width=True, help="Isso apaga o dashboard atual e cria um novo.")
-    else:
-        gerar = st.button("🚀 Gerar dashboard", type="primary", use_container_width=True, disabled=True)
-        st.caption("Preencha seu nome na Aba 1.")
+    col_kpi1, col_kpi2 = st.columns([4, 1], gap="small")
+    with col_kpi1:
+        instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
+    with col_kpi2:
+        st.write("") 
+        st.write("")
+        if nome_atual != "Anônimo" and nome_atual != "":
+            gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True)
+        else:
+            gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True, disabled=True)
+            st.caption("Preencha seu nome na Aba 1.")
 
-    # Lógica de Geração (Mantida)
     if gerar:
-        with st.status("🧠 Construindo Dashboard...", expanded=True) as status:
+        # Iniciando cronômetros e buffers
+        start_time = time.time()
+        log_buffer = io.StringIO()
+        
+        with st.status("🧠 IA trabalhando...", expanded=True) as status:
             try:
+                # 1. Estatísticas Pré-Execução
                 df_atual = st.session_state["df_final"]
+                rows, cols = df_atual.shape
+                origem_dados = "Demo" if st.session_state.get("modo_demo") else "Upload"
+                
                 temp_path = salvar_temp_csv(df_atual)
                 
                 buffer = [f"Colunas: {list(df_atual.columns)}", df_atual.head(3).to_markdown(index=False)]
                 user_req = f"Usuário: {nome_atual}. Pedido: {instrucao}"
                 inputs = {'file_path': temp_path, 'user_request': user_req, 'data_summary': "\n".join(buffer)}
                 
-                result = StoryVisCrew().crew().kickoff(inputs=inputs)
+                # Estimativa de Tokens Input
+                est_tokens_in = len(str(inputs)) / 4
+                
+                # 2. Execução com Captura de Terminal
+                with contextlib.redirect_stdout(log_buffer):
+                    result = StoryVisCrew().crew().kickoff(inputs=inputs)
+                
                 raw = result.raw
                 
+                # 3. Pós-Processamento
                 narrativa, codigo_sujo = separar_narrativa_codigo(raw)
                 codigo_limpo = limpar_codigo_ia(codigo_sujo)
 
@@ -224,21 +249,53 @@ with tab_dash:
                 st.session_state["editor_codigo_area"] = codigo_limpo 
                 st.session_state["modo_demo"] = False
                 
-                status.update(label="Dashboard Criado!", state="complete", expanded=False)
+                # 4. Finalização Estatística
+                end_time = time.time()
+                tempo_total = end_time - start_time
+                terminal_output = log_buffer.getvalue()
+                est_tokens_out = len(raw) / 4
+                
+                status.update(label=f"Concluído em {tempo_total:.2f}s!", state="complete", expanded=False)
 
+                # 5. Logging Avançado
                 if LOGGING_ATIVO:
-                    salvar_log_pinecone(nome_atual, instrucao, codigo_limpo, "Sucesso")
+                    salvar_log_pinecone(
+                        usuario=nome_atual,
+                        input_usuario=instrucao,
+                        output_ia=codigo_limpo,
+                        status="Sucesso",
+                        execution_time=tempo_total,
+                        terminal_log=terminal_output,
+                        dataset_rows=rows,
+                        dataset_cols=cols,
+                        data_source=origem_dados,
+                        action_type="CREATE",
+                        est_input_tokens=est_tokens_in,
+                        est_output_tokens=est_tokens_out
+                    )
+
             except Exception as e:
-                st.error(f"Erro: {e}")
-                if LOGGING_ATIVO: salvar_log_pinecone(nome_atual, instrucao, str(e), "Erro")
+                # Tratamento de erro com Log
+                end_time = time.time()
+                tempo_total = end_time - start_time
+                terminal_output = log_buffer.getvalue()
+                
+                st.error(f"Erro na geração: {e}")
+                if LOGGING_ATIVO:
+                    salvar_log_pinecone(
+                        usuario=nome_atual,
+                        input_usuario=instrucao,
+                        output_ia=str(e),
+                        status="Erro",
+                        execution_time=tempo_total,
+                        terminal_log=terminal_output
+                    )
 
     st.divider()
 
     # ===================================================
-    # ÁREA 2: VISUALIZAÇÃO E EVOLUÇÃO (AQUI ESTÁ A MUDANÇA UX)
+    # ÁREA 2: VISUALIZAÇÃO
     # ===================================================
-    
-    # Container do Gráfico
     container_grafico = st.container(border=True)
     with container_grafico:
         st.markdown("#### 📊 Resultado")
@@ -247,55 +304,81 @@ with tab_dash:
                 local_ctx = {"pd": pd, "st": st, "alt": alt, "df": st.session_state["df_final"]}
                 exec(st.session_state["codigo_final"], globals(), local_ctx)
             except Exception as e:
-                st.warning("Erro na renderização.")
-                with st.expander("Detalhes"): st.write(e)
+                st.warning("⚠️ O código gerado contém erros ou os dados mudaram.")
+                with st.expander("Ver erro técnico"): st.write(e)
         else:
             st.info("O gráfico aparecerá aqui.")
 
     # ===================================================
-    # ÁREA 3: EVOLUÇÃO INFINITA (ABAIXO DO GRÁFICO)
+    # ÁREA 3: EVOLUÇÃO INFINITA
     # ===================================================
     if st.session_state["codigo_final"]:
         st.markdown("### ✨ Evoluir Dashboard")
-        st.caption("Adicione mais gráficos ao painel acima sem perder o que já foi feito.")
         
         c_add1, c_add2 = st.columns([4, 1], gap="small")
         with c_add1:
-            # Input com Key para podermos limpar depois se quisermos, mas manter o histórico é bom
-            instrucao_add = st.text_input("O que você quer adicionar agora?", placeholder="Ex: Adicione um gráfico de pizza de Lucro...", key="input_evolucao")
+            instrucao_add = st.text_input("O que adicionar agora?", placeholder="Ex: Adicione um gráfico de pizza...", key="input_evolucao")
         with c_add2:
             st.write("")
             st.write("")
             btn_adicionar = st.button("➕ Inserir Gráfico", use_container_width=True)
 
         if btn_adicionar and instrucao_add:
+            # Cronômetro Update
+            start_time = time.time()
+            log_buffer = io.StringIO()
+            
             with st.status("🔧 Adicionando novo visual...", expanded=True) as status:
                 try:
+                    df_atual = st.session_state["df_final"]
+                    rows, cols = df_atual.shape
+                    
                     inputs_update = {
                         'current_code': st.session_state["codigo_final"], 
                         'user_request': instrucao_add
                     }
+                    est_tokens_in = len(str(inputs_update)) / 4
                     
-                    result = StoryVisCrew().crew_update().kickoff(inputs=inputs_update)
+                    with contextlib.redirect_stdout(log_buffer):
+                        result = StoryVisCrew().crew_update().kickoff(inputs=inputs_update)
                     
-                    codigo_novo_bruto = result.raw
-                    codigo_novo_limpo = limpar_codigo_ia(codigo_novo_bruto)
+                    raw = result.raw
+                    codigo_novo_limpo = limpar_codigo_ia(raw) # Update geralmente não tem narrativa separada
                     
-                    # Atualiza e mantém o ciclo
                     st.session_state["codigo_final"] = codigo_novo_limpo
                     st.session_state["editor_codigo_area"] = codigo_novo_limpo
                     
-                    status.update(label="Adicionado com Sucesso!", state="complete", expanded=False)
+                    end_time = time.time()
+                    tempo_total = end_time - start_time
+                    terminal_output = log_buffer.getvalue()
+                    est_tokens_out = len(raw) / 4
+                    
+                    status.update(label="Adicionado!", state="complete", expanded=False)
                     
                     if LOGGING_ATIVO:
-                        salvar_log_pinecone(nome_atual, f"[ADD] {instrucao_add}", codigo_novo_limpo, "Sucesso")
+                        salvar_log_pinecone(
+                            usuario=nome_atual,
+                            input_usuario=f"[ADD] {instrucao_add}",
+                            output_ia=codigo_novo_limpo,
+                            status="Sucesso",
+                            execution_time=tempo_total,
+                            terminal_log=terminal_output,
+                            dataset_rows=rows,
+                            dataset_cols=cols,
+                            data_source="Existing",
+                            action_type="APPEND",
+                            est_input_tokens=est_tokens_in,
+                            est_output_tokens=est_tokens_out
+                        )
                     
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao adicionar: {e}")
+                    # Log de erro simplificado aqui
+                    if LOGGING_ATIVO: salvar_log_pinecone(nome_atual, f"[ADD] {instrucao_add}", str(e), "Erro")
 
     # ===================================================
-    # ÁREA 4: CÓDIGO FONTE (ESCONDIDO)
+    # ÁREA 4: CÓDIGO FONTE
     # ===================================================
     st.markdown("---")
     with st.expander("🛠️ Ver/Editar Código Fonte (Avançado)", expanded=False):
@@ -313,9 +396,9 @@ with tab_dash:
 # ABA 3: INSIGHTS
 # -------------------------------------------------------
 with tab_insights:
-    st.subheader("📝 Narrativa de Negócios")
+    st.subheader("📝 Narrativa Técnica")
     if st.session_state["narrativa_final"]:
         with st.container(border=True):
             st.markdown(st.session_state["narrativa_final"])
     else:
-        st.info("A explicação textual da IA aparecerá aqui.")
+        st.info("O relatório da Gramática dos Gráficos aparecerá aqui.")
