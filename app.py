@@ -201,17 +201,12 @@ with tab_dash:
     # ===================================================
     # ÁREA 1: CRIAÇÃO INICIAL
     # ===================================================
-    col_kpi1, col_kpi2 = st.columns([4, 1], gap="small")
-    with col_kpi1:
-        instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
-    with col_kpi2:
-        st.write("") 
-        st.write("")
-        if nome_atual != "Anônimo" and nome_atual != "":
-            gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True)
-        else:
-            gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True, disabled=True)
-            st.caption("Preencha seu nome na Aba 1.")
+    instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
+    if nome_atual != "Anônimo" and nome_atual != "":
+        gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True)
+    else:
+        gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True, disabled=True)
+        st.caption("Preencha seu nome na Aba 1.")
 
     if gerar:
         # Iniciando cronômetros e buffers
