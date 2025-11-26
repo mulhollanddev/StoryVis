@@ -153,7 +153,14 @@ with tab_dados:
                 st.session_state["df_final"] = df_loaded.copy()
                 st.session_state["arquivo_cache"] = uploaded_file.name
                 st.session_state["modo_demo"] = False
-                st.toast("Arquivo carregado!", icon="✅")
+                
+                # --- ADICIONE ISTO AQUI PARA LIMPAR O ERRO ---
+                st.session_state["codigo_final"] = ""     # Limpa o código antigo
+                st.session_state["narrativa_final"] = ""  # Limpa a narrativa antiga
+                st.session_state["editor_codigo_area"] = "" # Limpa o editor visual
+                # ---------------------------------------------
+                
+                st.toast("Arquivo carregado! Código anterior limpo.", icon="✅")
 
     st.divider()
 
@@ -180,7 +187,8 @@ with tab_dados:
 with tab_dash:
     st.subheader("Painel Visual")
 
-    instrucao = st.text_input("O que deseja visualizar?", placeholder="Ex: Gráfico de Vendas por Categoria...")
+    with st.expander("Deseja visualizar um gráfico específico?", expanded=False):
+        instrucao = st.text_input("O que deseja visualizar?", placeholder="Ex: Gráfico de Vendas por Categoria...")
     
     nome_atual = st.session_state.get("nome_participante", "").strip()
     
@@ -243,11 +251,16 @@ with tab_dash:
         if st.session_state["codigo_final"]:
             try:
                 local_ctx = {"pd": pd, "st": st, "alt": alt, "df": st.session_state["df_final"]}
-                # O exec agora roda aqui dentro
                 exec(st.session_state["codigo_final"], globals(), local_ctx)
             except Exception as e:
-                st.error("Erro no código Python:")
-                st.write(e)
+                # --- MUDANÇA AQUI: VISUAL AMIGÁVEL ---
+                st.warning("⚠️ Os dados mudaram ou o código contém erros.")
+                st.info("👉 Clique em **'🚀 Gerar com IA'** acima para criar um gráfico novo compatível com seus dados.")
+                
+                # Deixa o erro técnico escondido para não poluir, caso vc queira ver
+                with st.expander("Ver erro técnico (para desenvolvedores)"):
+                    st.write(e)
+                # -------------------------------------
         else:
             st.info("O gráfico aparecerá aqui.")
 
