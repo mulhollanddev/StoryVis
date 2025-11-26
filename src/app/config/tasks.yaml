@@ -41,3 +41,28 @@ create_narrative_task:
     IMPORTANTE: Você PRECISA copiar e colar o código Python exato que recebeu da tarefa anterior após o separador.
   expected_output: >
     Análise Gramatical |||SEP||| Código Python Original.
+
+append_chart_task:
+  description: >
+    Você é um Desenvolvedor Senior em Manutenção de Código.
+    
+    INPUTS:
+    1. Código Python Atual:
+    {current_code}
+    
+    2. Novo Pedido do Usuário: 
+    {user_request}
+    
+    OBJETIVO:
+    Adicione o novo gráfico solicitado ao código existente SEM remover nada do que já está lá.
+    
+    REGRAS DE ENGENHARIA:
+    1. Analise o código atual e descubra qual é o nome da variável do DataFrame filtrado (geralmente 'df_filtered' ou similar). Use ELA para o novo gráfico.
+    2. NÃO crie novos filtros se eles já existirem. Aproveite os filtros da sidebar/topo.
+    3. Adicione o novo gráfico no final do script, preferencialmente dentro de um 'st.expander("Nova Visualização")' ou uma nova 'st.container'.
+    4. Mantenha todos os imports e funções de carregamento originais.
+    
+    SAÍDA:
+    Retorne o Código Python COMPLETO e ATUALIZADO (Código Antigo + Novo Gráfico).
+  expected_output: >
+    Apenas o Código Python Completo.

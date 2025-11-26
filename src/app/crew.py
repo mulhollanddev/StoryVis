@@ -4,7 +4,7 @@ from crewai.project import CrewBase, agent, crew, task
 
 @CrewBase
 class StoryVisCrew:
-    """StoryVis crew Invertida (Code First -> Narrative Second)"""
+    """StoryVis crew Híbrida"""
     
     base_path = os.path.dirname(os.path.abspath(__file__))
     agents_config = os.path.join(base_path, 'config', 'agents.yaml')
@@ -30,39 +30,55 @@ class StoryVisCrew:
     @agent
     def storyteller(self) -> Agent:
         return Agent(
-            config=self.agents_config['storyteller'], # Pode manter a config antiga ou simplificar
+            config=self.agents_config['storyteller'],
             name="Storyteller",
             verbose=True,
             llm=self.llm_fast 
         )
 
-    # --- TAREFAS (ORDEM INVERTIDA) ---
-
-    # 1. Primeiro geramos o código
+    # --- TAREFAS NORMAIS (CRIAÇÃO) ---
     @task
     def develop_code_task(self) -> Task:
         return Task(
             config=self.tasks_config['develop_code_task'],
             agent=self.dashboard_developer()
-            # Sem contexto, ele olha direto pro input do usuário
         )
 
-    # 2. Depois analisamos o código gerado
     @task
     def create_narrative_task(self) -> Task:
         return Task(
             config=self.tasks_config['create_narrative_task'],
             agent=self.storyteller(),
-            context=[self.develop_code_task()] # <--- Recebe o código aqui
+            context=[self.develop_code_task()]
         )
 
+    # --- NOVA TAREFA (ATUALIZAÇÃO) ---
+    @task
+    def append_chart_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['append_chart_task'],
+            agent=self.dashboard_developer() 
+            # Reusamos o Developer, pois ele sabe codar
+        )
+
+    # --- CREW PADRÃO (GERAR DO ZERO) ---
     @crew
     def crew(self) -> Crew:
         return Crew(
             agents=self.agents,
-            tasks=self.tasks, 
+            tasks=[self.develop_code_task(), self.create_narrative_task()],
             process=Process.sequential,
             verbose=True,
             max_rpm=2,
+            memory=False
+        )
+
+    # --- NOVA CREW (ATUALIZAR) ---
+    def crew_update(self) -> Crew:
+        return Crew(
+            agents=[self.dashboard_developer()], # Só precisa do Dev
+            tasks=[self.append_chart_task()],    # Só roda a tarefa de append
+            process=Process.sequential,
+            verbose=True,
             memory=False
         )

@@ -90,26 +90,27 @@ def carregar_demo_inicial():
         "Meta": [1000, 1000, 2500, 2500, 1000, 1000]
     })
     codigo_fake = """
-import streamlit as st
-import altair as alt
-import pandas as pd
+        import streamlit as st
+        import altair as alt
+        import pandas as pd
 
-# Container para restringir largura
-c = st.container()
-with c:
-    chart = alt.Chart(df).mark_bar().encode(
-        x=alt.X('Mês', sort=None),
-        y='Vendas',
-        color='Produto',
-        tooltip=['Mês', 'Produto', 'Vendas']
-    ).interactive()
+        # Container para restringir largura
+        c = st.container()
+        with c:
+            st.markdown("### Gráfico Demonstração")
+            chart = alt.Chart(df).mark_bar().encode(
+                x=alt.X('Mês', sort=None),
+                y='Vendas',
+                color='Produto',
+                tooltip=['Mês', 'Produto', 'Vendas']
+            ).interactive()
 
-    st.altair_chart(chart, use_container_width=True)
-"""
+            st.altair_chart(chart, use_container_width=True)
+        """
     narrativa_fake = """
-### 🚀 Demonstração Automática
-Estes são dados de exemplo. Para começar, vá na aba **Dados** e insira seu nome.
-"""
+        ### 🚀 Demonstração Automática
+        Estes são dados de exemplo. Para começar, vá na aba **Dados** e insira seu nome.
+        """
     return df_fake, codigo_fake, narrativa_fake
 
 # ===============================================
@@ -123,6 +124,7 @@ if "df_final" not in st.session_state:
     st.session_state["editor_codigo_area"] = cod_demo
     st.session_state["modo_demo"] = True
     st.session_state["nome_participante"] = "" 
+    st.session_state["input_add_chart"] = "" # Controle do input de adicionar
 
 # ===============================================
 # Interface Principal
@@ -141,9 +143,13 @@ tab_dados, tab_dash, tab_insights = st.tabs([
 with tab_dados:
     st.subheader("Preparação dos Dados")
     
-    nome_input = st.text_input("👤 Nome Completo (Obrigatório)", placeholder="Digite seu nome aqui...")
-    st.session_state["nome_participante"] = nome_input
-    uploaded_file = st.file_uploader("📂 Carregar Arquivo Próprio", type=["csv", "xlsx", "xls"])
+    col_nome, col_upload = st.columns([1, 2], gap="medium")
+    with col_nome:
+        nome_input = st.text_input("👤 Nome Completo (Obrigatório)", placeholder="Digite seu nome aqui...")
+        st.session_state["nome_participante"] = nome_input
+        
+    with col_upload:
+        uploaded_file = st.file_uploader("📂 Carregar Arquivo Próprio", type=["csv", "xlsx", "xls"])
 
     if uploaded_file:
         if "arquivo_cache" not in st.session_state or st.session_state["arquivo_cache"] != uploaded_file.name:
@@ -153,14 +159,7 @@ with tab_dados:
                 st.session_state["df_final"] = df_loaded.copy()
                 st.session_state["arquivo_cache"] = uploaded_file.name
                 st.session_state["modo_demo"] = False
-                
-                # --- ADICIONE ISTO AQUI PARA LIMPAR O ERRO ---
-                st.session_state["codigo_final"] = ""     # Limpa o código antigo
-                st.session_state["narrativa_final"] = ""  # Limpa a narrativa antiga
-                st.session_state["editor_codigo_area"] = "" # Limpa o editor visual
-                # ---------------------------------------------
-                
-                st.toast("Arquivo carregado! Código anterior limpo.", icon="✅")
+                st.toast("Arquivo carregado!", icon="✅")
 
     st.divider()
 
@@ -186,26 +185,31 @@ with tab_dados:
 # -------------------------------------------------------
 with tab_dash:
     st.subheader("Painel Visual")
+    
+    # Validação do Nome no topo
+    nome_atual = st.session_state.get("nome_participante", "Anônimo").strip()
+    if not nome_atual: nome_atual = "Anônimo"
 
-    with st.expander("Deseja visualizar um gráfico específico?", expanded=False):
-        instrucao = st.text_input("O que deseja visualizar?", placeholder="Ex: Gráfico de Vendas por Categoria...")
+    # ===================================================
+    # ÁREA 1: CRIAÇÃO INICIAL (GERAR DO ZERO)
+    # ===================================================
     
-    nome_atual = st.session_state.get("nome_participante", "").strip()
+    instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
     
-    if nome_atual:
-        gerar = st.button("🚀 Gerar Nova Análise com IA", type="primary", use_container_width=True)
+    if nome_atual != "Anônimo" and nome_atual != "":
+        gerar = st.button("🚀 Gerar dashboard", type="primary", use_container_width=True, help="Isso apaga o dashboard atual e cria um novo.")
     else:
-        st.warning("⚠️ **Atenção:** Para gerar o dashboard, volte na aba 'Dados' e preencha seu **Nome**.")
-        gerar = st.button("🚀 Gerar Nova Análise com IA", type="primary", use_container_width=True, disabled=True)
+        gerar = st.button("🚀 Gerar dashboard", type="primary", use_container_width=True, disabled=True)
+        st.caption("Preencha seu nome na Aba 1.")
 
+    # Lógica de Geração (Mantida)
     if gerar:
-        with st.status("🧠 IA trabalhando...", expanded=True) as status:
+        with st.status("🧠 Construindo Dashboard...", expanded=True) as status:
             try:
                 df_atual = st.session_state["df_final"]
                 temp_path = salvar_temp_csv(df_atual)
                 
                 buffer = [f"Colunas: {list(df_atual.columns)}", df_atual.head(3).to_markdown(index=False)]
-                
                 user_req = f"Usuário: {nome_atual}. Pedido: {instrucao}"
                 inputs = {'file_path': temp_path, 'user_request': user_req, 'data_summary': "\n".join(buffer)}
                 
@@ -220,62 +224,88 @@ with tab_dash:
                 st.session_state["editor_codigo_area"] = codigo_limpo 
                 st.session_state["modo_demo"] = False
                 
-                status.update(label="Concluído!", state="complete", expanded=False)
+                status.update(label="Dashboard Criado!", state="complete", expanded=False)
 
                 if LOGGING_ATIVO:
-                    salvar_log_pinecone(
-                        usuario=nome_atual,
-                        input_usuario=instrucao,
-                        output_ia=codigo_limpo,
-                        status="Sucesso"
-                    )
-
+                    salvar_log_pinecone(nome_atual, instrucao, codigo_limpo, "Sucesso")
             except Exception as e:
-                st.error(f"Erro na geração: {e}")
-                if LOGGING_ATIVO:
-                    salvar_log_pinecone(
-                        usuario=nome_atual,
-                        input_usuario=instrucao,
-                        output_ia=str(e),
-                        status="Erro"
-                    )
+                st.error(f"Erro: {e}")
+                if LOGGING_ATIVO: salvar_log_pinecone(nome_atual, instrucao, str(e), "Erro")
 
     st.divider()
 
-    # Layout Principal: O Gráfico ocupa tudo por padrão
-    # Mas criamos um container para garantir que ele não "vaze"
+    # ===================================================
+    # ÁREA 2: VISUALIZAÇÃO E EVOLUÇÃO (AQUI ESTÁ A MUDANÇA UX)
+    # ===================================================
+    
+    # Container do Gráfico
     container_grafico = st.container(border=True)
-
     with container_grafico:
-        st.markdown("#### 📊 Visualização")
+        st.markdown("#### 📊 Resultado")
         if st.session_state["codigo_final"]:
             try:
                 local_ctx = {"pd": pd, "st": st, "alt": alt, "df": st.session_state["df_final"]}
                 exec(st.session_state["codigo_final"], globals(), local_ctx)
             except Exception as e:
-                # --- MUDANÇA AQUI: VISUAL AMIGÁVEL ---
-                st.warning("⚠️ Os dados mudaram ou o código contém erros.")
-                st.info("👉 Clique em **'🚀 Gerar com IA'** acima para criar um gráfico novo compatível com seus dados.")
-                
-                # Deixa o erro técnico escondido para não poluir, caso vc queira ver
-                with st.expander("Ver erro técnico (para desenvolvedores)"):
-                    st.write(e)
-                # -------------------------------------
+                st.warning("Erro na renderização.")
+                with st.expander("Detalhes"): st.write(e)
         else:
             st.info("O gráfico aparecerá aqui.")
 
-    # Área de Código Fonte (Expander fechado por padrão)
+    # ===================================================
+    # ÁREA 3: EVOLUÇÃO INFINITA (ABAIXO DO GRÁFICO)
+    # ===================================================
+    if st.session_state["codigo_final"]:
+        st.markdown("### ✨ Evoluir Dashboard")
+        st.caption("Adicione mais gráficos ao painel acima sem perder o que já foi feito.")
+        
+        c_add1, c_add2 = st.columns([4, 1], gap="small")
+        with c_add1:
+            # Input com Key para podermos limpar depois se quisermos, mas manter o histórico é bom
+            instrucao_add = st.text_input("O que você quer adicionar agora?", placeholder="Ex: Adicione um gráfico de pizza de Lucro...", key="input_evolucao")
+        with c_add2:
+            st.write("")
+            st.write("")
+            btn_adicionar = st.button("➕ Inserir Gráfico", use_container_width=True)
+
+        if btn_adicionar and instrucao_add:
+            with st.status("🔧 Adicionando novo visual...", expanded=True) as status:
+                try:
+                    inputs_update = {
+                        'current_code': st.session_state["codigo_final"], 
+                        'user_request': instrucao_add
+                    }
+                    
+                    result = StoryVisCrew().crew_update().kickoff(inputs=inputs_update)
+                    
+                    codigo_novo_bruto = result.raw
+                    codigo_novo_limpo = limpar_codigo_ia(codigo_novo_bruto)
+                    
+                    # Atualiza e mantém o ciclo
+                    st.session_state["codigo_final"] = codigo_novo_limpo
+                    st.session_state["editor_codigo_area"] = codigo_novo_limpo
+                    
+                    status.update(label="Adicionado com Sucesso!", state="complete", expanded=False)
+                    
+                    if LOGGING_ATIVO:
+                        salvar_log_pinecone(nome_atual, f"[ADD] {instrucao_add}", codigo_novo_limpo, "Sucesso")
+                    
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao adicionar: {e}")
+
+    # ===================================================
+    # ÁREA 4: CÓDIGO FONTE (ESCONDIDO)
+    # ===================================================
     st.markdown("---")
     with st.expander("🛠️ Ver/Editar Código Fonte (Avançado)", expanded=False):
-        st.caption("Você pode editar o código Python abaixo e aplicar as mudanças.")
-        
         codigo_editado = st.text_area(
             "Python Script",
             value=st.session_state.get("editor_codigo_area", st.session_state["codigo_final"]),
             height=400,
             key="editor_codigo_area_widget"
         )
-        if st.button("💾 Aplicar Alterações", use_container_width=True):
+        if st.button("💾 Aplicar Alterações Manuais", use_container_width=True):
             st.session_state["codigo_final"] = codigo_editado
             st.rerun()
 
