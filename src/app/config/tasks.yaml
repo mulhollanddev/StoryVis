@@ -1,37 +1,43 @@
-create_narrative_task:
-  description: >
-    Analise o resumo dos dados abaixo:
-    {data_summary}
-
-    Escreva um texto curto de 2 parágrafos com insights de negócio sobre esses dados.
-    Seja direto.
-  expected_output: >
-    Texto em Markdown.
-
 develop_code_task:
   description: >
-    Gere o código Python para o dashboard interativo.
+    Você é um Desenvolvedor Senior. Gere o código Python para um dashboard Streamlit.
     
-    Entrada: '{file_path}'
-    Estrutura: {data_summary}
-    Narrativa: Contexto da tarefa anterior.
+    Dados: {data_summary}
+    Pedido do Usuário: {user_request}
+    Arquivo: '{file_path}'
     
-    REGRAS DE INTERATIVIDADE (OBRIGATÓRIO):
-    1. Identifique colunas categóricas (ex: Região, Vendedor, Categoria, Mês).
-    2. Crie filtros usando 'st.multiselect' ou 'st.selectbox'. Organize-os usando 'st.columns'.
-    3. Crie um novo dataframe filtrado (ex: df_filtered) aplicando as seleções do usuário.
-    4. Use esse 'df_filtered' para gerar os gráficos Altair.
-    
-    REGRAS DE FORMATAÇÃO DE SAÍDA:
-    Retorne UMA única string:
-    [Narrativa]
-    |||SEP|||
-    [Código Python]
-    
-    Regras do Código:
-    - Use 'pd.read_csv(r"{file_path}")'.
-    - NÃO use 'st.set_page_config'.
-    - NÃO use '@st.cache'.
-    - O código deve tratar o caso de filtro vazio (se nada selecionado, mostre tudo).
+    REGRAS DE CODIFICAÇÃO:
+    1. Crie filtros interativos (st.multiselect) para colunas categóricas.
+    2. Crie 2 ou 3 gráficos Altair interessantes (ex: Temporal e Categórico).
+    3. Use 'pd.read_csv(r"{file_path}")'.
+    4. NÃO use '@st.cache' ou 'st.set_page_config'.
+    5. NÃO explique nada, apenas gere o código.
   expected_output: >
-    Texto contendo Narrativa |||SEP||| Código Python com Filtros.
+    Apenas o código Python válido.
+
+create_narrative_task:
+  description: >
+    Você é um Arquiteto de Dados.
+    ANALISE O CÓDIGO PYTHON GERADO PELA TAREFA ANTERIOR.
+    
+    Com base nos gráficos que o desenvolvedor criou no código, gere o relatório da Gramática dos Gráficos.
+    
+    ESTRUTURA DA ANÁLISE (Markdown):
+    **1. Dados:** Quais colunas foram usadas no código?
+    **2. Transformações:** O código faz filtros ou agrupa dados?
+    **3. Mapeamentos:** O que está no eixo X, Y e Cor (encode)?
+    **4. Marcas:** Qual 'mark_' foi usado (bar, line, circle)?
+    **5. Avaliação:** O gráfico escolhido faz sentido para os dados?
+
+    ---
+    REGRAS DE SAÍDA CRÍTICAS (MONTAGEM FINAL):
+    Você deve retornar UMA única string combinando sua análise e o código original.
+    
+    Formato:
+    [Sua Análise da Gramática dos Gráficos]
+    |||SEP|||
+    [O CÓDIGO PYTHON ORIGINAL QUE VOCÊ RECEBEU DO CONTEXTO]
+    
+    IMPORTANTE: Você PRECISA copiar e colar o código Python exato que recebeu da tarefa anterior após o separador.
+  expected_output: >
+    Análise Gramatical |||SEP||| Código Python Original.

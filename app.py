@@ -21,7 +21,7 @@ except ImportError:
     st.error("Erro crítico: Não foi possível importar 'src.app.crew'.")
     st.stop()
 
-# 2. Logger (Pinecone) - Rodando silenciosamente
+# 2. Logger (Pinecone)
 try:
     from src.app.services.logger import salvar_log_pinecone
     LOGGING_ATIVO = True
@@ -83,7 +83,6 @@ def separar_narrativa_codigo(raw_text):
     return narrativa, codigo_sujo
 
 def carregar_demo_inicial():
-    """Modo Demonstração."""
     df_fake = pd.DataFrame({
         "Mês": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"],
         "Produto": ["Smartphone", "Smartphone", "Laptop", "Laptop", "Tablet", "Tablet"],
@@ -95,14 +94,17 @@ import streamlit as st
 import altair as alt
 import pandas as pd
 
-chart = alt.Chart(df).mark_bar().encode(
-    x=alt.X('Mês', sort=None),
-    y='Vendas',
-    color='Produto',
-    tooltip=['Mês', 'Produto', 'Vendas']
-).interactive()
+# Container para restringir largura
+c = st.container()
+with c:
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X('Mês', sort=None),
+        y='Vendas',
+        color='Produto',
+        tooltip=['Mês', 'Produto', 'Vendas']
+    ).interactive()
 
-st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, use_container_width=True)
 """
     narrativa_fake = """
 ### 🚀 Demonstração Automática
@@ -120,7 +122,7 @@ if "df_final" not in st.session_state:
     st.session_state["narrativa_final"] = narr_demo
     st.session_state["editor_codigo_area"] = cod_demo
     st.session_state["modo_demo"] = True
-    st.session_state["nome_participante"] = "" # Começa vazio para forçar o input
+    st.session_state["nome_participante"] = "" 
 
 # ===============================================
 # Interface Principal
@@ -140,7 +142,6 @@ with tab_dados:
     st.subheader("Preparação dos Dados")
     
     nome_input = st.text_input("👤 Nome Completo (Obrigatório)", placeholder="Digite seu nome aqui...")
-    # Atualiza o estado sempre que digitar
     st.session_state["nome_participante"] = nome_input
     uploaded_file = st.file_uploader("📂 Carregar Arquivo Próprio", type=["csv", "xlsx", "xls"])
 
@@ -174,21 +175,18 @@ with tab_dados:
     st.session_state["df_final"] = df_editado
 
 # -------------------------------------------------------
-# ABA 2: DASHBOARD + LOGGING (Com Trava de Nome)
+# ABA 2: DASHBOARD + LOGGING
 # -------------------------------------------------------
 with tab_dash:
-    st.subheader("Painel Visual & Editor")
+    st.subheader("Painel Visual")
 
     instrucao = st.text_input("O que deseja visualizar?", placeholder="Ex: Gráfico de Vendas por Categoria...")
     
-    # --- TRAVA DE SEGURANÇA DO NOME ---
     nome_atual = st.session_state.get("nome_participante", "").strip()
     
     if nome_atual:
-        # Se tem nome, botão habilitado
         gerar = st.button("🚀 Gerar Nova Análise com IA", type="primary", use_container_width=True)
     else:
-        # Se não tem nome, aviso e botão desabilitado
         st.warning("⚠️ **Atenção:** Para gerar o dashboard, volte na aba 'Dados' e preencha seu **Nome**.")
         gerar = st.button("🚀 Gerar Nova Análise com IA", type="primary", use_container_width=True, disabled=True)
 
@@ -200,11 +198,9 @@ with tab_dash:
                 
                 buffer = [f"Colunas: {list(df_atual.columns)}", df_atual.head(3).to_markdown(index=False)]
                 
-                # Usa o nome validado
                 user_req = f"Usuário: {nome_atual}. Pedido: {instrucao}"
                 inputs = {'file_path': temp_path, 'user_request': user_req, 'data_summary': "\n".join(buffer)}
                 
-                # --- CHAMA A CREW ---
                 result = StoryVisCrew().crew().kickoff(inputs=inputs)
                 raw = result.raw
                 
@@ -218,7 +214,6 @@ with tab_dash:
                 
                 status.update(label="Concluído!", state="complete", expanded=False)
 
-                # --- 🌲 LOGGING SILENCIOSO NO PINECONE ---
                 if LOGGING_ATIVO:
                     salvar_log_pinecone(
                         usuario=nome_atual,
@@ -226,7 +221,6 @@ with tab_dash:
                         output_ia=codigo_limpo,
                         status="Sucesso"
                     )
-                # -----------------------------------------
 
             except Exception as e:
                 st.error(f"Erro na geração: {e}")
@@ -240,13 +234,16 @@ with tab_dash:
 
     st.divider()
 
-    col_grafico, col_editor = st.columns([2, 1], gap="medium")
+    # Layout Principal: O Gráfico ocupa tudo por padrão
+    # Mas criamos um container para garantir que ele não "vaze"
+    container_grafico = st.container(border=True)
 
-    with col_grafico:
+    with container_grafico:
         st.markdown("#### 📊 Visualização")
         if st.session_state["codigo_final"]:
             try:
                 local_ctx = {"pd": pd, "st": st, "alt": alt, "df": st.session_state["df_final"]}
+                # O exec agora roda aqui dentro
                 exec(st.session_state["codigo_final"], globals(), local_ctx)
             except Exception as e:
                 st.error("Erro no código Python:")
@@ -254,12 +251,15 @@ with tab_dash:
         else:
             st.info("O gráfico aparecerá aqui.")
 
-    with col_editor:
-        st.markdown("#### 🛠️ Código Fonte")
+    # Área de Código Fonte (Expander fechado por padrão)
+    st.markdown("---")
+    with st.expander("🛠️ Ver/Editar Código Fonte (Avançado)", expanded=False):
+        st.caption("Você pode editar o código Python abaixo e aplicar as mudanças.")
+        
         codigo_editado = st.text_area(
             "Python Script",
             value=st.session_state.get("editor_codigo_area", st.session_state["codigo_final"]),
-            height=450,
+            height=400,
             key="editor_codigo_area_widget"
         )
         if st.button("💾 Aplicar Alterações", use_container_width=True):
