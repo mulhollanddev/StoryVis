@@ -12,6 +12,8 @@ develop_code_task:
     3. Use 'pd.read_csv(r"{file_path}")'.
     4. NÃO use '@st.cache' ou 'st.set_page_config'.
     5. NÃO explique nada, apenas gere o código.
+    6. MAPAS: Só crie mapas se existirem colunas explícitas de 'Latitude' 
+    e 'Longitude'. Use 'st.map(df)' para isso. Se não tiver lat/lon, use gráfico de barras.
   expected_output: >
     Apenas o código Python válido.
 
@@ -64,5 +66,27 @@ append_chart_task:
     
     SAÍDA:
     Retorne o Código Python COMPLETO e ATUALIZADO (Código Antigo + Novo Gráfico).
+  expected_output: >
+    Apenas o Código Python Completo.
+
+append_chart_task:
+  description: >
+    Você é um Especialista em Manutenção de Código.
+    
+    INPUTS:
+    1. Código Atual: {current_code}
+    2. Pedido (Novo Gráfico): {user_request}
+    
+    OBJETIVO:
+    Adicione o novo gráfico ao código existente.
+    
+    REGRAS:
+    1. IDIOMA: Títulos e eixos em Português.
+    2. ZOOM: Adicione `.interactive()` no novo gráfico.
+    3. Use o DataFrame filtrado já existente no código.
+    4. Adicione o novo gráfico no final do script dentro de um container ou expander.
+    
+    SAÍDA:
+    Retorne APENAS o Código Python COMPLETO e ATUALIZADO.
   expected_output: >
     Apenas o Código Python Completo.
