@@ -109,7 +109,7 @@ with c:
         tooltip=['Mês', 'Produto', 'Vendas']
     ).interactive()
 
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 """
     narrativa_fake = """
 ### 🚀 Demonstração Automática
@@ -186,7 +186,7 @@ with tab_dados:
             st.session_state["modo_demo"] = True
             st.rerun()
 
-    df_editado = st.data_editor(st.session_state["df_final"], use_container_width=True, num_rows="dynamic")
+    df_editado = st.data_editor(st.session_state["df_final"], width="stretch", num_rows="dynamic")
     st.session_state["df_final"] = df_editado
 
 # -------------------------------------------------------
@@ -203,9 +203,9 @@ with tab_dash:
     # ===================================================
     instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
     if nome_atual != "Anônimo" and nome_atual != "":
-        gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True)
+        gerar = st.button("🚀 Criar do Zero", type="primary", width="stretch")
     else:
-        gerar = st.button("🚀 Criar do Zero", type="primary", use_container_width=True, disabled=True)
+        gerar = st.button("🚀 Criar do Zero", type="primary", width="stretch", disabled=True)
         st.caption("Preencha seu nome na Aba 1.")
 
     if gerar:
@@ -316,7 +316,7 @@ with tab_dash:
         with c_add2:
             st.write("")
             st.write("")
-            btn_adicionar = st.button("➕ Inserir Gráfico", use_container_width=True)
+            btn_adicionar = st.button("➕ Inserir Gráfico", width="stretch")
 
         if btn_adicionar and instrucao_add:
             # Cronômetro Update
@@ -383,7 +383,7 @@ with tab_dash:
             height=400,
             key="editor_codigo_area_widget"
         )
-        if st.button("💾 Aplicar Alterações Manuais", use_container_width=True):
+        if st.button("💾 Aplicar Alterações Manuais", width="stretch"):
             st.session_state["codigo_final"] = codigo_editado
             st.rerun()
 
