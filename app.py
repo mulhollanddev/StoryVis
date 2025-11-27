@@ -137,8 +137,8 @@ st.title("📊 StoryVis: Analytics com IA")
 
 tab_dados, tab_dash, tab_insights = st.tabs([
     "✏️ Dados & Configuração", 
-    "📈 Dashboard & Código", 
-    "📝 Narrativa de Insights"
+    "📈 Dashboard", 
+    "📝 Sobre os gráficos"
 ])
 
 # -------------------------------------------------------
