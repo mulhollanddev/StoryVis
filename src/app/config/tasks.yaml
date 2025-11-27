@@ -12,8 +12,10 @@ develop_code_task:
     3. Use 'pd.read_csv(r"{file_path}")'.
     4. NÃO use '@st.cache' ou 'st.set_page_config'.
     5. NÃO explique nada, apenas gere o código.
-    6. MAPAS: Só crie mapas se existirem colunas explícitas de 'Latitude' 
-    e 'Longitude'. Use 'st.map(df)' para isso. Se não tiver lat/lon, use gráfico de barras.
+    6. MAPAS: Só crie mapas se existirem colunas explícitas de 'Latitude' e 'Longitude'. Use 'st.map(df)'.
+    7. IDIOMA: Todo o texto visível (títulos, eixos, tooltips) DEVE estar em PORTUGUÊS DO BRASIL.
+    8. ZOOM: Adicione '.interactive()' em TODOS os gráficos Altair.
+    9. COR: Sempre que possível, use 'color' para diferenciar categorias.
   expected_output: >
     Apenas o código Python válido.
 
@@ -36,7 +38,7 @@ create_narrative_task:
     Você deve retornar UMA única string combinando sua análise e o código original.
     
     Formato:
-    [Sua Análise da Gramática dos Gráficos]
+    [Sua Análise da Gramática dos Gráficos em Português]
     |||SEP|||
     [O CÓDIGO PYTHON ORIGINAL QUE VOCÊ RECEBEU DO CONTEXTO]
     
@@ -46,45 +48,22 @@ create_narrative_task:
 
 append_chart_task:
   description: >
-    Você é um Desenvolvedor Senior em Manutenção de Código.
-    
-    INPUTS:
-    1. Código Python Atual:
-    {current_code}
-    
-    2. Novo Pedido do Usuário: 
-    {user_request}
-    
-    OBJETIVO:
-    Adicione o novo gráfico solicitado ao código existente SEM remover nada do que já está lá.
-    
-    REGRAS DE ENGENHARIA:
-    1. Analise o código atual e descubra qual é o nome da variável do DataFrame filtrado (geralmente 'df_filtered' ou similar). Use ELA para o novo gráfico.
-    2. NÃO crie novos filtros se eles já existirem. Aproveite os filtros da sidebar/topo.
-    3. Adicione o novo gráfico no final do script, preferencialmente dentro de um 'st.expander("Nova Visualização")' ou uma nova 'st.container'.
-    4. Mantenha todos os imports e funções de carregamento originais.
-    
-    SAÍDA:
-    Retorne o Código Python COMPLETO e ATUALIZADO (Código Antigo + Novo Gráfico).
-  expected_output: >
-    Apenas o Código Python Completo.
-
-append_chart_task:
-  description: >
-    Você é um Especialista em Manutenção de Código.
+    Você é um Especialista em Manutenção de Código Python/Streamlit.
     
     INPUTS:
     1. Código Atual: {current_code}
     2. Pedido (Novo Gráfico): {user_request}
     
     OBJETIVO:
-    Adicione o novo gráfico ao código existente.
+    Adicione o novo gráfico ao código existente SEM remover nada do que já está lá.
     
-    REGRAS:
-    1. IDIOMA: Títulos e eixos em Português.
-    2. ZOOM: Adicione `.interactive()` no novo gráfico.
-    3. Use o DataFrame filtrado já existente no código.
-    4. Adicione o novo gráfico no final do script dentro de um container ou expander.
+    REGRAS DE ENGENHARIA:
+    1. Analise o código atual e descubra qual é o nome da variável do DataFrame filtrado (geralmente 'df_filtered' ou similar). Use ELA para o novo gráfico.
+    2. NÃO crie novos filtros se eles já existirem na sidebar.
+    3. Adicione o novo gráfico no final do script, dentro de um 'st.expander' ou container.
+    4. IDIOMA: Títulos e eixos em Português do Brasil.
+    5. ZOOM: Adicione '.interactive()' no novo gráfico.
+    6. Mantenha todos os imports originais.
     
     SAÍDA:
     Retorne APENAS o Código Python COMPLETO e ATUALIZADO.

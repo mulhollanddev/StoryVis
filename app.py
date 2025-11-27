@@ -88,7 +88,7 @@ with tab_dados:
             st.session_state["modo_demo"] = True
             st.rerun()
 
-    df_editado = st.data_editor(st.session_state["df_final"], use_container_width=True, num_rows="dynamic")
+    df_editado = st.data_editor(st.session_state["df_final"], width="stretch", num_rows="dynamic")
     st.session_state["df_final"] = df_editado
 
 # -------------------------------------------------------
