@@ -30,7 +30,7 @@ try:
     LOGGING_ATIVO = True
 except ImportError:
     LOGGING_ATIVO = False
-    # Função dummy para não quebrar o código se o logger falhar
+    # Função dummy para não quebrar o código
     def salvar_log_pinecone(*args, **kwargs): pass
 
 # ===============================================
@@ -98,7 +98,7 @@ import streamlit as st
 import altair as alt
 import pandas as pd
 
-# Container para restringir largura e manter estilo
+# Container para restringir largura
 c = st.container()
 with c:
     st.markdown("### 📈 Demonstração")
@@ -109,6 +109,7 @@ with c:
         tooltip=['Mês', 'Produto', 'Vendas']
     ).interactive()
 
+    # Opção segura para evitar warnings
     st.altair_chart(chart, width="stretch")
 """
     narrativa_fake = """
@@ -177,7 +178,8 @@ with tab_dados:
         origem = "Demo" if st.session_state.get("modo_demo") else "Seu Arquivo"
         st.markdown(f"**Tabela de Dados ({origem})**")
     with col_btn:
-        if st.button("🔄 Restaurar Demo"):
+        # Botão com novo padrão width="stretch"
+        if st.button("🔄 Restaurar Demo", width="stretch"):
             df_demo, cod_demo, narr_demo = carregar_demo_inicial()
             st.session_state["df_final"] = df_demo
             st.session_state["codigo_final"] = cod_demo
@@ -201,15 +203,15 @@ with tab_dash:
     # ===================================================
     # ÁREA 1: CRIAÇÃO INICIAL
     # ===================================================
+    
     instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
     if nome_atual != "Anônimo" and nome_atual != "":
-        gerar = st.button("🚀 Criar do Zero", type="primary", width="stretch")
+        gerar = st.button("🚀 Gerar Dashboard", type="primary", width="stretch")
     else:
-        gerar = st.button("🚀 Criar do Zero", type="primary", width="stretch", disabled=True)
+        gerar = st.button("🚀 Gerar Dashboard", type="primary", width="stretch", disabled=True)
         st.caption("Preencha seu nome na Aba 1.")
 
     if gerar:
-        # Iniciando cronômetros e buffers
         start_time = time.time()
         log_buffer = io.StringIO()
         
@@ -226,10 +228,9 @@ with tab_dash:
                 user_req = f"Usuário: {nome_atual}. Pedido: {instrucao}"
                 inputs = {'file_path': temp_path, 'user_request': user_req, 'data_summary': "\n".join(buffer)}
                 
-                # Estimativa de Tokens Input
                 est_tokens_in = len(str(inputs)) / 4
                 
-                # 2. Execução com Captura de Terminal
+                # 2. Execução
                 with contextlib.redirect_stdout(log_buffer):
                     result = StoryVisCrew().crew().kickoff(inputs=inputs)
                 
@@ -252,12 +253,13 @@ with tab_dash:
                 
                 status.update(label=f"Concluído em {tempo_total:.2f}s!", state="complete", expanded=False)
 
-                # 5. Logging Avançado
+                # 5. Logging Avançado (AQUI ESTÁ A NARRATIVA!)
                 if LOGGING_ATIVO:
                     salvar_log_pinecone(
                         usuario=nome_atual,
                         input_usuario=instrucao,
                         output_ia=codigo_limpo,
+                        output_narrativa=narrativa, # <--- RECUPERADO AQUI
                         status="Sucesso",
                         execution_time=tempo_total,
                         terminal_log=terminal_output,
@@ -270,7 +272,6 @@ with tab_dash:
                     )
 
             except Exception as e:
-                # Tratamento de erro com Log
                 end_time = time.time()
                 tempo_total = end_time - start_time
                 terminal_output = log_buffer.getvalue()
@@ -281,6 +282,7 @@ with tab_dash:
                         usuario=nome_atual,
                         input_usuario=instrucao,
                         output_ia=str(e),
+                        output_narrativa="Erro na execução", # Valor padrão para erro
                         status="Erro",
                         execution_time=tempo_total,
                         terminal_log=terminal_output
@@ -319,7 +321,6 @@ with tab_dash:
             btn_adicionar = st.button("➕ Inserir Gráfico", width="stretch")
 
         if btn_adicionar and instrucao_add:
-            # Cronômetro Update
             start_time = time.time()
             log_buffer = io.StringIO()
             
@@ -338,7 +339,7 @@ with tab_dash:
                         result = StoryVisCrew().crew_update().kickoff(inputs=inputs_update)
                     
                     raw = result.raw
-                    codigo_novo_limpo = limpar_codigo_ia(raw) # Update geralmente não tem narrativa separada
+                    codigo_novo_limpo = limpar_codigo_ia(raw) 
                     
                     st.session_state["codigo_final"] = codigo_novo_limpo
                     st.session_state["editor_codigo_area"] = codigo_novo_limpo
@@ -355,6 +356,7 @@ with tab_dash:
                             usuario=nome_atual,
                             input_usuario=f"[ADD] {instrucao_add}",
                             output_ia=codigo_novo_limpo,
+                            output_narrativa="Atualização (Sem narrativa nova)",
                             status="Sucesso",
                             execution_time=tempo_total,
                             terminal_log=terminal_output,
@@ -369,8 +371,7 @@ with tab_dash:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao adicionar: {e}")
-                    # Log de erro simplificado aqui
-                    if LOGGING_ATIVO: salvar_log_pinecone(nome_atual, f"[ADD] {instrucao_add}", str(e), "Erro")
+                    if LOGGING_ATIVO: salvar_log_pinecone(nome_atual, f"[ADD] {instrucao_add}", str(e), "Erro", status="Erro")
 
     # ===================================================
     # ÁREA 4: CÓDIGO FONTE

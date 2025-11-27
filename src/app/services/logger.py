@@ -5,34 +5,43 @@ from datetime import datetime
 from pinecone import Pinecone
 from dotenv import load_dotenv
 
+# Carrega variáveis de ambiente
 load_dotenv()
 
+# Configurações do Pinecone
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 INDEX_NAME = os.getenv("PINECONE_INDEX_NAME_LOG")
 NAMESPACE_LOGS = "app-logs" 
+
+# Dimensão do seu índice (conforme seu erro anterior)
 DIMENSION = 1024 
 
 def get_dummy_vector():
+    """
+    Retorna um vetor válido (não-zero) para servir de placeholder.
+    Preenchemos com 0.01 para não ser rejeitado pelo Pinecone.
+    """
     return [0.01] * DIMENSION
 
 def salvar_log_pinecone(
     usuario, 
     input_usuario, 
-    output_ia, 
+    output_ia,         # Código Python gerado
+    output_narrativa,  # Texto da Narrativa (Gramática dos Gráficos)
     status="Sucesso", 
     execution_time=0.0, 
     terminal_log="",
-    # --- NOVOS PARÂMETROS ESTATÍSTICOS ---
     dataset_rows=0,
     dataset_cols=0,
-    data_source="Desconhecido", # 'Demo' ou 'Upload'
-    action_type="Create",       # 'Create' ou 'Append'
-    est_input_tokens=0,         # Estimativa
-    est_output_tokens=0         # Estimativa
+    data_source="Desconhecido",
+    action_type="Create",
+    est_input_tokens=0,
+    est_output_tokens=0
 ):
     """
-    Salva logs estatísticos avançados para BI.
+    Salva logs estatísticos avançados para BI no Pinecone.
     """
+    # Verificação de segurança se as chaves existem
     if not PINECONE_API_KEY or not INDEX_NAME:
         return False
 
@@ -40,13 +49,15 @@ def salvar_log_pinecone(
         pc = Pinecone(api_key=PINECONE_API_KEY)
         index = pc.Index(INDEX_NAME)
 
+        # 1. Cria ID único para o log
         log_id = f"log_{int(time.time())}_{str(uuid.uuid4())[:8]}"
 
-        # Tratamento de logs longos
+        # 2. Tratamento de Strings Longas (Corta para não estourar limite de metadata)
         trace_limpo = str(terminal_log)
         if len(trace_limpo) > 4000:
             trace_limpo = trace_limpo[:2000] + "\n...[CORTADO]...\n" + trace_limpo[-2000:]
 
+        # 3. Monta o Metadata (Onde os dados vivem)
         metadata = {
             # --- BÁSICOS ---
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -54,9 +65,10 @@ def salvar_log_pinecone(
             "status": status,
             "latency_seconds": float(execution_time),
             
-            # --- CONTEXTO ---
+            # --- CONTEXTO DA IA ---
             "input_prompt": str(input_usuario),
-            "output_resumo": str(output_ia)[:1000],
+            "output_resumo": str(output_ia)[:1500],       # Código (cortado)
+            "output_narrativa": str(output_narrativa)[:3000], # Narrativa (cortada)
             "crew_trace": trace_limpo,
             
             # --- ESTATÍSTICAS DE DADOS (BI) ---
@@ -66,14 +78,14 @@ def salvar_log_pinecone(
             "action_type": str(action_type),
             
             # --- ECONOMIA (TOKENS) ---
-            # Pinecone aceita Int ou Float, ideal para somar depois
             "tokens_in_est": int(est_input_tokens),
             "tokens_out_est": int(est_output_tokens),
             "code_lines": len(str(output_ia).split('\n')),
             
-            "tipo": "log_sistema_v2"
+            "tipo": "log_sistema_v3"
         }
 
+        # 4. Upsert usando vetor dummy
         vector_valido = get_dummy_vector()
 
         index.upsert(
@@ -88,13 +100,13 @@ def salvar_log_pinecone(
 
 def ler_ultimos_logs(limit=10):
     """
-    Busca os logs usando o mesmo vetor dummy como referência.
+    Busca os logs mais recentes usando o vetor dummy como âncora.
     """
     try:
         pc = Pinecone(api_key=PINECONE_API_KEY)
         index = pc.Index(INDEX_NAME)
         
-        # Usa o mesmo vetor de 0.01 para buscar os vizinhos (logs)
+        # Usa o mesmo vetor de 0.01 para buscar
         vector_consulta = get_dummy_vector()
         
         results = index.query(
@@ -109,8 +121,7 @@ def ler_ultimos_logs(limit=10):
             if match.get('metadata'):
                 logs.append(match['metadata'])
         
-        # Ordena por timestamp (mais recente primeiro) se possível
-        # (O Pinecone retorna por similaridade, mas como todos são iguais, a ordem pode variar)
+        # Tenta ordenar por data (string), reverso
         logs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
             
         return logs
