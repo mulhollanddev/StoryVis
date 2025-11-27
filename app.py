@@ -1,134 +1,35 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import tempfile
 import os
 import sys
-import re
 import time
 import io
 import contextlib
 
-# ===============================================
 # Configuração da Página
-# ===============================================
 st.set_page_config(page_title="StoryVis - Analytics & Logs", layout="wide", page_icon="📊")
 
-# --- Importações Dinâmicas ---
+# --- Importações Locais ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# 1. CrewAI
+# Imports de Lógica
 try:
     from src.app.crew import StoryVisCrew
-except ImportError:
-    st.error("Erro crítico: Não foi possível importar 'src.app.crew'.")
+    from src.app.services.logger import salvar_log_pinecone
+    from src.app.utils import (
+        carregar_dados, salvar_temp_csv, limpar_codigo_ia, 
+        separar_narrativa_codigo, inicializar_session_state
+    )
+    from src.app.demo import carregar_demo_inicial
+    
+    LOGGING_ATIVO = True
+except ImportError as e:
+    st.error(f"Erro crítico de importação: {e}")
     st.stop()
 
-# 2. Logger (Pinecone)
-try:
-    from src.app.services.logger import salvar_log_pinecone
-    LOGGING_ATIVO = True
-except ImportError:
-    LOGGING_ATIVO = False
-    # Função dummy para não quebrar o código
-    def salvar_log_pinecone(*args, **kwargs): pass
-
-# ===============================================
-# Funções Auxiliares
-# ===============================================
-@st.cache_data(ttl=3600, show_spinner=False)
-def carregar_dados(uploaded_file):
-    try:
-        if uploaded_file.name.endswith('.csv'):
-            return pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith(('.xls', '.xlsx')):
-            return pd.read_excel(uploaded_file)
-    except Exception as e:
-        st.error(f"Erro ao ler arquivo: {e}")
-        return None
-
-def salvar_temp_csv(df):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode='w', encoding='utf-8') as tmp:
-        df.to_csv(tmp.name, index=False)
-        return tmp.name
-
-def limpar_codigo_ia(texto_bruto):
-    if not texto_bruto: return ""
-    padrao = r"```(?:python)?\s*(.*?)```"
-    match = re.search(padrao, texto_bruto, re.DOTALL)
-    if match: return match.group(1).strip()
-    
-    linhas = texto_bruto.split('\n')
-    linhas_limpas = []
-    for linha in linhas:
-        l = linha.lower().strip()
-        if l.startswith(("espero que", "hope this", "segue o", "aqui está", "qualquer dúvida")):
-            break
-        linhas_limpas.append(linha)
-    return "\n".join(linhas_limpas).strip()
-
-def separar_narrativa_codigo(raw_text):
-    narrativa = ""
-    codigo_sujo = ""
-    if "|||SEP|||" in raw_text:
-        parts = raw_text.split("|||SEP|||")
-        narrativa = parts[0].strip()
-        if len(parts) > 1: codigo_sujo = parts[1]
-    elif "```python" in raw_text:
-        parts = raw_text.split("```python")
-        narrativa = parts[0].strip()
-        codigo_sujo = "```python" + parts[1]
-    elif "import streamlit" in raw_text:
-        idx = raw_text.find("import streamlit")
-        narrativa = raw_text[:idx].strip()
-        codigo_sujo = raw_text[idx:]
-    else:
-        narrativa = raw_text
-    return narrativa, codigo_sujo
-
-def carregar_demo_inicial():
-    df_fake = pd.DataFrame({
-        "Mês": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"],
-        "Produto": ["Smartphone", "Smartphone", "Laptop", "Laptop", "Tablet", "Tablet"],
-        "Vendas": [1200, 1500, 3000, 3200, 800, 950],
-        "Meta": [1000, 1000, 2500, 2500, 1000, 1000]
-    })
-    codigo_fake = """
-import streamlit as st
-import altair as alt
-import pandas as pd
-
-# Container para restringir largura
-c = st.container()
-with c:
-    st.markdown("### 📈 Demonstração")
-    chart = alt.Chart(df).mark_bar().encode(
-        x=alt.X('Mês', sort=None),
-        y='Vendas',
-        color='Produto',
-        tooltip=['Mês', 'Produto', 'Vendas']
-    ).interactive()
-
-    # Opção segura para evitar warnings
-    st.altair_chart(chart, width="stretch")
-"""
-    narrativa_fake = """
-### 🚀 Demonstração Automática
-Estes são dados de exemplo. Para começar a usar seus dados, vá na aba **Dados** e insira seu nome.
-"""
-    return df_fake, codigo_fake, narrativa_fake
-
-# ===============================================
-# Inicialização de Estado
-# ===============================================
-if "df_final" not in st.session_state:
-    df_demo, cod_demo, narr_demo = carregar_demo_inicial()
-    st.session_state["df_final"] = df_demo
-    st.session_state["codigo_final"] = cod_demo
-    st.session_state["narrativa_final"] = narr_demo
-    st.session_state["editor_codigo_area"] = cod_demo
-    st.session_state["modo_demo"] = True
-    st.session_state["nome_participante"] = "" 
+# Inicialização de Estado (Refatorado para utils)
+inicializar_session_state(carregar_demo_inicial)
 
 # ===============================================
 # Interface Principal
@@ -164,7 +65,7 @@ with tab_dados:
                 st.session_state["arquivo_cache"] = uploaded_file.name
                 st.session_state["modo_demo"] = False
                 
-                # Limpa estado anterior
+                # Reset limpo
                 st.session_state["codigo_final"] = ""
                 st.session_state["narrativa_final"] = ""
                 st.session_state["editor_codigo_area"] = ""
@@ -178,17 +79,16 @@ with tab_dados:
         origem = "Demo" if st.session_state.get("modo_demo") else "Seu Arquivo"
         st.markdown(f"**Tabela de Dados ({origem})**")
     with col_btn:
-        # Botão com novo padrão width="stretch"
         if st.button("🔄 Restaurar Demo", width="stretch"):
-            df_demo, cod_demo, narr_demo = carregar_demo_inicial()
-            st.session_state["df_final"] = df_demo
-            st.session_state["codigo_final"] = cod_demo
-            st.session_state["narrativa_final"] = narr_demo
-            st.session_state["editor_codigo_area"] = cod_demo
+            df_d, cod_d, narr_d = carregar_demo_inicial()
+            st.session_state["df_final"] = df_d
+            st.session_state["codigo_final"] = cod_d
+            st.session_state["narrativa_final"] = narr_d
+            st.session_state["editor_codigo_area"] = cod_d
             st.session_state["modo_demo"] = True
             st.rerun()
 
-    df_editado = st.data_editor(st.session_state["df_final"], width="stretch", num_rows="dynamic")
+    df_editado = st.data_editor(st.session_state["df_final"], use_container_width=True, num_rows="dynamic")
     st.session_state["df_final"] = df_editado
 
 # -------------------------------------------------------
@@ -200,16 +100,13 @@ with tab_dash:
     nome_atual = st.session_state.get("nome_participante", "Anônimo").strip()
     if not nome_atual: nome_atual = "Anônimo"
 
-    # ===================================================
-    # ÁREA 1: CRIAÇÃO INICIAL
-    # ===================================================
+    # --- Área de Criação ---
     
-    instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas com 3 gráficos...")
-    if nome_atual != "Anônimo" and nome_atual != "":
-        gerar = st.button("🚀 Gerar Dashboard", type="primary", width="stretch")
-    else:
-        gerar = st.button("🚀 Gerar Dashboard", type="primary", width="stretch", disabled=True)
-        st.caption("Preencha seu nome na Aba 1.")
+    instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas...")
+    estado_btn = "primary" if (nome_atual != "Anônimo" and nome_atual != "") else "secondary"
+    desabilitado = (nome_atual == "Anônimo" or nome_atual == "")
+    gerar = st.button("🚀 Gerar dashboard", type="primary", width="stretch", disabled=desabilitado)
+    if desabilitado: st.caption("Preencha seu nome.")
 
     if gerar:
         start_time = time.time()
@@ -217,26 +114,23 @@ with tab_dash:
         
         with st.status("🧠 IA trabalhando...", expanded=True) as status:
             try:
-                # 1. Estatísticas Pré-Execução
+                # Estatísticas
                 df_atual = st.session_state["df_final"]
                 rows, cols = df_atual.shape
                 origem_dados = "Demo" if st.session_state.get("modo_demo") else "Upload"
                 
                 temp_path = salvar_temp_csv(df_atual)
-                
                 buffer = [f"Colunas: {list(df_atual.columns)}", df_atual.head(3).to_markdown(index=False)]
                 user_req = f"Usuário: {nome_atual}. Pedido: {instrucao}"
                 inputs = {'file_path': temp_path, 'user_request': user_req, 'data_summary': "\n".join(buffer)}
                 
                 est_tokens_in = len(str(inputs)) / 4
                 
-                # 2. Execução
+                # Execução
                 with contextlib.redirect_stdout(log_buffer):
                     result = StoryVisCrew().crew().kickoff(inputs=inputs)
                 
                 raw = result.raw
-                
-                # 3. Pós-Processamento
                 narrativa, codigo_sujo = separar_narrativa_codigo(raw)
                 codigo_limpo = limpar_codigo_ia(codigo_sujo)
 
@@ -245,7 +139,7 @@ with tab_dash:
                 st.session_state["editor_codigo_area"] = codigo_limpo 
                 st.session_state["modo_demo"] = False
                 
-                # 4. Finalização Estatística
+                # Finalização
                 end_time = time.time()
                 tempo_total = end_time - start_time
                 terminal_output = log_buffer.getvalue()
@@ -253,46 +147,30 @@ with tab_dash:
                 
                 status.update(label=f"Concluído em {tempo_total:.2f}s!", state="complete", expanded=False)
 
-                # 5. Logging Avançado (AQUI ESTÁ A NARRATIVA!)
                 if LOGGING_ATIVO:
                     salvar_log_pinecone(
-                        usuario=nome_atual,
-                        input_usuario=instrucao,
-                        output_ia=codigo_limpo,
-                        output_narrativa=narrativa, # <--- RECUPERADO AQUI
-                        status="Sucesso",
-                        execution_time=tempo_total,
-                        terminal_log=terminal_output,
-                        dataset_rows=rows,
-                        dataset_cols=cols,
-                        data_source=origem_dados,
-                        action_type="CREATE",
-                        est_input_tokens=est_tokens_in,
-                        est_output_tokens=est_tokens_out
+                        usuario=nome_atual, input_usuario=instrucao, output_ia=codigo_limpo,
+                        output_narrativa=narrativa, status="Sucesso", execution_time=tempo_total,
+                        terminal_log=terminal_output, dataset_rows=rows, dataset_cols=cols,
+                        data_source=origem_dados, action_type="CREATE",
+                        est_input_tokens=est_tokens_in, est_output_tokens=est_tokens_out
                     )
 
             except Exception as e:
                 end_time = time.time()
                 tempo_total = end_time - start_time
                 terminal_output = log_buffer.getvalue()
-                
                 st.error(f"Erro na geração: {e}")
                 if LOGGING_ATIVO:
                     salvar_log_pinecone(
-                        usuario=nome_atual,
-                        input_usuario=instrucao,
-                        output_ia=str(e),
-                        output_narrativa="Erro na execução", # Valor padrão para erro
-                        status="Erro",
-                        execution_time=tempo_total,
+                        usuario=nome_atual, input_usuario=instrucao, output_ia=str(e),
+                        output_narrativa="Erro", status="Erro", execution_time=tempo_total,
                         terminal_log=terminal_output
                     )
 
     st.divider()
 
-    # ===================================================
-    # ÁREA 2: VISUALIZAÇÃO
-    # ===================================================
+    # --- Área Visualização ---
     container_grafico = st.container(border=True)
     with container_grafico:
         st.markdown("#### 📊 Resultado")
@@ -306,12 +184,9 @@ with tab_dash:
         else:
             st.info("O gráfico aparecerá aqui.")
 
-    # ===================================================
-    # ÁREA 3: EVOLUÇÃO INFINITA
-    # ===================================================
+    # --- Área Evolução ---
     if st.session_state["codigo_final"]:
         st.markdown("### ✨ Evoluir Dashboard")
-        
         c_add1, c_add2 = st.columns([4, 1], gap="small")
         with c_add1:
             instrucao_add = st.text_input("O que adicionar agora?", placeholder="Ex: Adicione um gráfico de pizza...", key="input_evolucao")
@@ -323,16 +198,12 @@ with tab_dash:
         if btn_adicionar and instrucao_add:
             start_time = time.time()
             log_buffer = io.StringIO()
-            
             with st.status("🔧 Adicionando novo visual...", expanded=True) as status:
                 try:
                     df_atual = st.session_state["df_final"]
                     rows, cols = df_atual.shape
                     
-                    inputs_update = {
-                        'current_code': st.session_state["codigo_final"], 
-                        'user_request': instrucao_add
-                    }
+                    inputs_update = {'current_code': st.session_state["codigo_final"], 'user_request': instrucao_add}
                     est_tokens_in = len(str(inputs_update)) / 4
                     
                     with contextlib.redirect_stdout(log_buffer):
@@ -353,29 +224,18 @@ with tab_dash:
                     
                     if LOGGING_ATIVO:
                         salvar_log_pinecone(
-                            usuario=nome_atual,
-                            input_usuario=f"[ADD] {instrucao_add}",
-                            output_ia=codigo_novo_limpo,
-                            output_narrativa="Atualização (Sem narrativa nova)",
-                            status="Sucesso",
-                            execution_time=tempo_total,
-                            terminal_log=terminal_output,
-                            dataset_rows=rows,
-                            dataset_cols=cols,
-                            data_source="Existing",
-                            action_type="APPEND",
-                            est_input_tokens=est_tokens_in,
-                            est_output_tokens=est_tokens_out
+                            usuario=nome_atual, input_usuario=f"[ADD] {instrucao_add}",
+                            output_ia=codigo_novo_limpo, output_narrativa="Update", status="Sucesso",
+                            execution_time=tempo_total, terminal_log=terminal_output,
+                            dataset_rows=rows, dataset_cols=cols, data_source="Existing",
+                            action_type="APPEND", est_input_tokens=est_tokens_in, est_output_tokens=est_tokens_out
                         )
-                    
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro ao adicionar: {e}")
+                    st.error(f"Erro: {e}")
                     if LOGGING_ATIVO: salvar_log_pinecone(nome_atual, f"[ADD] {instrucao_add}", str(e), "Erro", status="Erro")
 
-    # ===================================================
-    # ÁREA 4: CÓDIGO FONTE
-    # ===================================================
+    # --- Área Código Fonte ---
     st.markdown("---")
     with st.expander("🛠️ Ver/Editar Código Fonte (Avançado)", expanded=False):
         codigo_editado = st.text_area(
