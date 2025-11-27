@@ -8,7 +8,7 @@ import io
 import contextlib
 
 # Configuração da Página
-st.set_page_config(page_title="StoryVis - Analytics & Logs", layout="wide", page_icon="📊")
+st.set_page_config(page_title="StoryVis", layout="wide", page_icon="📊")
 
 # --- Importações Locais ---
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
