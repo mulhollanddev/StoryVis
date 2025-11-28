@@ -11,6 +11,7 @@
 - **Editor de Código Vivo**: Visualize e edite o código Python gerado pela IA em tempo real.
 - **Data Storytelling**: Geração de narrativas textuais que explicam os dados em linguagem natural.
 - **Dashboard Dinâmico**: Interface organizada em abas para Dados, Dashboard/Editor e Insights.
+- **Evolução de Dashboard**: Adicione novos gráficos ao dashboard existente de forma iterativa, mantendo o contexto anterior.
 - **RAG (Retrieval-Augmented Generation)**: Uso de base de conhecimento para aplicar melhores práticas de design e storytelling.
 
 ## 🧠 Arquitetura de Agentes (CrewAI)
@@ -51,6 +52,12 @@ O sistema foi otimizado para operar com uma equipe enxuta e eficiente de agentes
     Crie um arquivo `.env` na raiz do projeto e adicione sua chave da Groq:
     ```env
     GROQ_API_KEY=sua_chave_aqui
+    GROQ_MODEL=llama-3.1-8b-instant
+    BASE_URL=https://api.groq.com/openai/v1
+    
+    # Opcional (para logs)
+    PINECONE_API_KEY=sua_chave_pinecone
+    PINECONE_INDEX_NAME_LOG=storyvis-logs
     ```
 
 ## ▶️ Como Usar
@@ -63,6 +70,7 @@ O sistema foi otimizado para operar com uma equipe enxuta e eficiente de agentes
 2.  **Interaja com as Abas:**
     - **✏️ Dados & Configuração**: Faça upload do seu arquivo (CSV/XLSX), visualize e edite os dados se necessário.
     - **📈 Dashboard & Código**: Peça para a IA gerar um gráfico (ex: "Vendas por região"). Veja o gráfico gerado e o código fonte lado a lado. Você pode ajustar o código manualmente e reaplicar!
+    - **✨ Evoluir Dashboard**: Após gerar o primeiro gráfico, use a seção "Evoluir Dashboard" para adicionar novos visuais (ex: "Adicione um gráfico de pizza") sem perder o trabalho anterior.
     - **📝 Narrativa de Insights**: Leia a explicação detalhada e o storytelling gerado pela IA sobre os dados visualizados.
 
 ## 📂 Estrutura do Projeto
