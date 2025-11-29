@@ -105,8 +105,8 @@ with tab_dash:
     instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas...")
     estado_btn = "primary" if (nome_atual != "Anônimo" and nome_atual != "") else "secondary"
     desabilitado = (nome_atual == "Anônimo" or nome_atual == "")
+    if desabilitado: st.error("🚨 **Obrigatório:** Vá na aba 'Dados' e preencha seu Nome para liberar.")
     gerar = st.button("🚀 Gerar dashboard", type="primary", width="stretch", disabled=desabilitado)
-    if desabilitado: st.caption("Preencha seu nome.")
 
     if gerar:
         start_time = time.time()
