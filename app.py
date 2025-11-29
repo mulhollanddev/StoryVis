@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Imports de Lógica
 try:
     from src.app.crew import StoryVisCrew
-    from src.app.services.logger import salvar_log_pinecone
+    from src.app.services.logger import salvar_log_pinecone, salvar_feedback_pinecone
     from src.app.utils import (
         carregar_dados, salvar_temp_csv, limpar_codigo_ia, 
         separar_narrativa_codigo, inicializar_session_state
@@ -36,10 +36,11 @@ inicializar_session_state(carregar_demo_inicial)
 # ===============================================
 st.title("📊 StoryVis: Analytics com IA")
 
-tab_dados, tab_dash, tab_insights = st.tabs([
+tab_dados, tab_dash, tab_insights, tab_feedback = st.tabs([
     "✏️ Dados & Configuração", 
     "📈 Dashboard", 
-    "📝 Sobre os gráficos"
+    "📝 Sobre os gráficos",
+    "🗣️ Feedback"
 ])
 
 # -------------------------------------------------------
@@ -252,9 +253,64 @@ with tab_dash:
 # ABA 3: INSIGHTS
 # -------------------------------------------------------
 with tab_insights:
-    st.subheader("📝 Narrativa Técnica")
+    st.subheader("Narrativa Técnica")
     if st.session_state["narrativa_final"]:
         with st.container(border=True):
             st.markdown(st.session_state["narrativa_final"])
     else:
         st.info("O relatório da Gramática dos Gráficos aparecerá aqui.")
+
+with tab_feedback:
+    st.subheader(" Feedback")
+
+    nome_feedback = st.session_state.get("nome_participante", "").strip()
+    
+    if not nome_feedback:
+        st.warning("⚠️ **Atenção:** Você precisa preencher seu **Nome** na aba '✏️ Dados' para poder enviar feedback.")
+
+    with st.form("form_feedback"):
+        st.write("O que achou da análise?")
+        
+        # --- MUDANÇA AQUI: ESTRELAS NATIVAS ---
+        # st.feedback retorna: 0, 1, 2, 3, 4 (ou None se não clicou)
+        feedback_stars = st.feedback("stars")
+        
+        comentario = st.text_area(
+            "Comentário (Opcional):", 
+            placeholder="Ex: O gráfico ficou ótimo, mas a cor estava ruim..."
+        )
+        
+        # Botão de envio
+        enviou = st.form_submit_button(
+            "Enviar Avaliação", 
+            type="primary",
+            disabled=(not nome_feedback) # True se vazio, False se tiver nome
+        )
+        
+        if enviou:
+            if LOGGING_ATIVO:
+                # Lógica para converter 0-4 para 1-5
+                # Se for None (usuário não clicou), assumimos 0 ou tratamos como erro
+                nota_final = (feedback_stars + 1) if feedback_stars is not None else 0
+                
+                if nota_final > 0:
+                    user_feedback = st.session_state.get("nome_participante", "Anônimo")
+                    
+                    salvou = salvar_feedback_pinecone(
+                        usuario=user_feedback,
+                        estrelas=nota_final, # Salva 1 a 5
+                        comentario=comentario
+                    )
+                    
+                    if salvou:
+                        st.toast("Obrigado pelo feedback! 🌟", icon="✅")
+                        time.sleep(2)
+                        st.rerun() # Limpa o form
+                else:
+                    st.warning("Por favor, selecione as estrelas antes de enviar.")
+            else:
+                st.error("Erro: Logger desativado.")
+
+
+st.divider()
+st.caption("LABVIS - UFPA © 2025")

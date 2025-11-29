@@ -128,3 +128,37 @@ def ler_ultimos_logs(limit=10):
     except Exception as e:
         print(f"Erro ao ler logs: {e}")
         return []
+    
+def salvar_feedback_pinecone(usuario, estrelas, comentario):
+    """
+    Salva o feedback explícito do usuário (1 a 5 estrelas + texto).
+    """
+    if not PINECONE_API_KEY or not INDEX_NAME:
+        return False
+
+    try:
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+        index = pc.Index(INDEX_NAME)
+
+        log_id = f"feed_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+
+        metadata = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "usuario": str(usuario),
+            "estrelas": int(estrelas),
+            "comentario": str(comentario)[:1000], # Limita tamanho
+            "tipo": "feedback_usuario" # <--- Tipo diferente para filtrar depois
+        }
+
+        # Vetor dummy
+        vector_valido = get_dummy_vector()
+
+        index.upsert(
+            vectors=[(log_id, vector_valido, metadata)],
+            namespace=NAMESPACE_LOGS
+        )
+        return True
+
+    except Exception as e:
+        print(f"❌ Erro ao salvar feedback: {e}")
+        return False
