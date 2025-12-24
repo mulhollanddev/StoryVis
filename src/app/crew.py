@@ -4,7 +4,7 @@ from crewai.project import CrewBase, agent, crew, task
 
 @CrewBase
 class StoryVisCrew:
-    """StoryVis crew Híbrida"""
+    """StoryVis crew Híbrida e Modular"""
     
     base_path = os.path.dirname(os.path.abspath(__file__))
     agents_config = os.path.join(base_path, 'config', 'agents.yaml')
@@ -17,7 +17,7 @@ class StoryVisCrew:
         base_url=os.getenv("BASE_URL")
     )
 
-    # --- AGENTES ---
+    # --- AGENTES (Carregados do YAML) ---
     @agent
     def dashboard_developer(self) -> Agent:
         return Agent(
@@ -36,7 +36,26 @@ class StoryVisCrew:
             llm=self.llm_fast 
         )
 
-    # --- TAREFAS NORMAIS (CRIAÇÃO) ---
+    @agent
+    def math_analyst(self) -> Agent:
+        return Agent(
+            config=self.agents_config['math_analyst'],
+            name="Math Analyst",
+            verbose=True,
+            llm=self.llm_fast
+        )
+
+    @agent
+    def complex_artist(self) -> Agent:
+        return Agent(
+            config=self.agents_config['complex_artist'],
+            name="Complex Artist",
+            verbose=True,
+            llm=self.llm_fast
+        )
+
+    # --- TAREFAS (Carregadas do YAML) ---
+
     @task
     def develop_code_task(self) -> Task:
         return Task(
@@ -49,23 +68,37 @@ class StoryVisCrew:
         return Task(
             config=self.tasks_config['create_narrative_task'],
             agent=self.storyteller(),
-            context=[self.develop_code_task()]
+            context=[self.develop_code_task()] # Contexto dinâmico pode ser sobrescrito na crew
         )
 
-    # --- NOVA TAREFA (ATUALIZAÇÃO) ---
     @task
     def append_chart_task(self) -> Task:
         return Task(
             config=self.tasks_config['append_chart_task'],
-            agent=self.dashboard_developer() 
-            # Reusamos o Developer, pois ele sabe codar
+            agent=self.dashboard_developer()
         )
 
-    # --- CREW PADRÃO (GERAR DO ZERO) ---
+    @task
+    def calculate_metrics_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['calculate_metrics_task'],
+            agent=self.math_analyst()
+        )
+
+    @task
+    def complex_viz_task(self) -> Task:
+        return Task(
+            config=self.tasks_config['complex_viz_task'],
+            agent=self.complex_artist()
+        )
+
+    # --- CREWS (DEFINIÇÃO DOS FLUXOS) ---
+
+    # 1. Crew Padrão (Gerar do Zero Simples)
     @crew
     def crew(self) -> Crew:
         return Crew(
-            agents=self.agents,
+            agents=[self.dashboard_developer(), self.storyteller()],
             tasks=[self.develop_code_task(), self.create_narrative_task()],
             process=Process.sequential,
             verbose=True,
@@ -73,11 +106,36 @@ class StoryVisCrew:
             memory=False
         )
 
-    # --- NOVA CREW (ATUALIZAR) ---
+    # 2. Crew de Atualização (Adicionar Gráfico)
     def crew_update(self) -> Crew:
         return Crew(
-            agents=[self.dashboard_developer()], # Só precisa do Dev
-            tasks=[self.append_chart_task()],    # Só roda a tarefa de append
+            agents=[self.dashboard_developer()],
+            tasks=[self.append_chart_task()],
+            process=Process.sequential,
+            verbose=True,
+            memory=False
+        )
+
+    # 3. Crew de Cálculo (Só Números)
+    def crew_calculation(self) -> Crew:
+        return Crew(
+            agents=[self.math_analyst()],
+            tasks=[self.calculate_metrics_task()],
+            process=Process.sequential,
+            verbose=True,
+            memory=False
+        )
+
+    # 4. Crew Complexa (Substitui o Dev Padrão pelo Artista)
+    def crew_complex(self) -> Crew:
+        # Aqui precisamos re-configurar o contexto da narrativa manualmente
+        narrative_task = self.create_narrative_task()
+        complex_task = self.complex_viz_task()
+        narrative_task.context = [complex_task] # O narrador agora lê o código complexo
+
+        return Crew(
+            agents=[self.complex_artist(), self.storyteller()],
+            tasks=[complex_task, narrative_task],
             process=Process.sequential,
             verbose=True,
             memory=False

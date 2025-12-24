@@ -12,7 +12,20 @@ develop_code_task:
     3. Use 'pd.read_csv(r"{file_path}")'.
     4. NÃO use '@st.cache' ou 'st.set_page_config'.
     5. NÃO explique nada, apenas gere o código.
-    6. MAPAS: Só crie mapas se existirem colunas explícitas de 'Latitude' e 'Longitude'. Use 'st.map(df)'.
+    6. MAPAS: Se houver 'Latitude' e 'Longitude', use este código de limpeza:
+       df_map = df_filtered.copy()
+       def clean_coord(x):
+           if pd.isna(x): return x
+           s = str(x).replace(',', '').strip()
+           # Remove todos os pontos, exceto o primeiro
+           if s.count('.') > 1:
+               parts = s.split('.')
+               s = parts[0] + '.' + ''.join(parts[1:])
+           return pd.to_numeric(s, errors='coerce')
+
+       df_map['lat'] = df_map['Latitude'].apply(clean_coord)
+       df_map['lon'] = df_map['Longitude'].apply(clean_coord)
+       st.map(df_map.dropna(subset=['lat', 'lon'])[['lat', 'lon']])
     7. IDIOMA: Todo o texto visível (títulos, eixos, tooltips) DEVE estar em PORTUGUÊS DO BRASIL.
     8. ZOOM: Adicione '.interactive()' em TODOS os gráficos Altair.
     9. COR: Sempre que possível, use 'color' para diferenciar categorias.
@@ -69,3 +82,51 @@ append_chart_task:
     Retorne APENAS o Código Python COMPLETO e ATUALIZADO.
   expected_output: >
     Apenas o Código Python Completo.
+
+calculate_metrics_task:
+  description: >
+    Você é um Analista de Dados Sênior.
+    
+    Dados: {data_summary}
+    Pedido: {user_request}
+    
+    OBJETIVO:
+    Calcular e explicar os números mais importantes solicitados.
+    NÃO gere código Python ou gráficos.
+    Gere um RESUMO EXECUTIVO em texto (Markdown).
+    
+    FORMATO DE SAÍDA:
+    Use markdown para destacar os números. Exemplo:
+    "**Média de Potência:** 150cv"
+    "**Carro mais potente:** Ferrari (800cv)"
+    
+    Seja direto e use bullet points.
+  expected_output: >
+    Texto em Markdown com os destaques numéricos.
+
+complex_viz_task:
+  description: >
+    Você é um Especialista em Visualização de Dados Avançada (Vega-Altair Master).
+    
+    Dados: {data_summary}
+    Pedido: {user_request}
+    Arquivo: '{file_path}'
+    
+    O usuário pediu uma visualização COMPLEXA (ex: camadas, arcos, duplo eixo).
+    1. Consulte a tool de RAG 'complex_viz_rag' para buscar inspirações de código.
+    2. Projete uma visualização usando 'alt.layer()', 'alt.vconcat()' ou 'alt.hconcat()'.
+    3. Combine marcas (ex: Barra + Linha de Média, ou Scatter + Regressão).
+    
+    SAÍDA:
+    Código Python completo do dashboard complexo.
+  expected_output: >
+    Código Python Complexo.
+
+geo_viz_task:
+  description: >
+    Você é um Especialista em Geoprocessamento.
+    Gere código Streamlit que utilize 'st.pydeck_chart' para visualizações 3D 
+    ou 'alt.Chart' com dados geográficos (topojson).
+    Requisito: O DataFrame deve possuir colunas de localização.
+  expected_output: >
+    Código Python com visualização de mapa avançada.

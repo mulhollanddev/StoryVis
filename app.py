@@ -1,13 +1,19 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import tempfile
 import os
 import sys
+import re
 import time
 import io
 import contextlib
+import json
+from groq import Groq 
 
+# ===============================================
 # Configuração da Página
+# ===============================================
 st.set_page_config(page_title="StoryVis", layout="wide", page_icon="📊")
 
 # --- Importações Locais ---
@@ -28,8 +34,45 @@ except ImportError as e:
     st.error(f"Erro crítico de importação: {e}")
     st.stop()
 
-# Inicialização de Estado (Refatorado para utils)
+# ===============================================
+# Funções Auxiliares (Ajustadas para Robustez)
+# ===============================================
+
+def router_intencao(prompt_usuario):
+    """
+    Decide se o pedido é complexo e se precisa de cálculo matemático.
+    """
+    try:
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        system_prompt = """
+        Classifique o pedido em JSON:
+        1. "complexidade": "alta" se pedir gráficos combinados, camadas, arcos, duplo eixo ou visualizações avançadas. "baixa" para gráficos padrão.
+        2. "calculo": true se pedir explicitamente médias, máximos, mínimos, "destaque o maior", "calcule a diferença" ou KPIs. false se for apenas visual.
+        """
+        
+        completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt_usuario}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0
+        )
+        return json.loads(completion.choices[0].message.content)
+    except Exception as e:
+        print(f"Erro no router: {e}")
+        return {"complexidade": "baixa", "calculo": False}
+
+def is_python_code(text):
+    """Verifica se o texto parece código Python ou texto natural."""
+    keywords = ['import ', 'st.', 'pd.', 'print(', 'def ', '=', 'return']
+    return any(k in text for k in keywords)
+
+# Inicialização de Estado
 inicializar_session_state(carregar_demo_inicial)
+if "codigo_calculo" not in st.session_state:
+    st.session_state["codigo_calculo"] = ""
 
 # ===============================================
 # Interface Principal
@@ -68,6 +111,7 @@ with tab_dados:
                 
                 # Reset limpo
                 st.session_state["codigo_final"] = ""
+                st.session_state["codigo_calculo"] = "" 
                 st.session_state["narrativa_final"] = ""
                 st.session_state["editor_codigo_area"] = ""
                 
@@ -84,6 +128,7 @@ with tab_dados:
             df_d, cod_d, narr_d = carregar_demo_inicial()
             st.session_state["df_final"] = df_d
             st.session_state["codigo_final"] = cod_d
+            st.session_state["codigo_calculo"] = ""
             st.session_state["narrativa_final"] = narr_d
             st.session_state["editor_codigo_area"] = cod_d
             st.session_state["modo_demo"] = True
@@ -102,40 +147,70 @@ with tab_dash:
     if not nome_atual: nome_atual = "Anônimo"
 
     # --- Área de Criação ---
+    instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Compare a potência e destaque a maior média...")
     
-    instrucao = st.text_input("🎯 Criar Dashboard Inicial:", placeholder="Ex: Dashboard completo de Vendas...")
-    estado_btn = "primary" if (nome_atual != "Anônimo" and nome_atual != "") else "secondary"
     desabilitado = (nome_atual == "Anônimo" or nome_atual == "")
-    if desabilitado: st.error("🚨 **Obrigatório:** Vá na aba 'Dados' e preencha seu Nome para liberar.")
+    if desabilitado: 
+        st.error("🚨 **Obrigatório:** Vá na aba 'Dados' e preencha seu Nome para liberar.")
+    
     gerar = st.button("🚀 Gerar dashboard", type="primary", width="stretch", disabled=desabilitado)
 
     if gerar:
         start_time = time.time()
         log_buffer = io.StringIO()
         
-        with st.status("🧠 IA trabalhando...", expanded=True) as status:
+        with st.status("🧠 Analisando requisição...", expanded=True) as status:
             try:
-                # Estatísticas
+                # 1. ROTEAMENTO DE INTENÇÃO
+                intencao = router_intencao(instrucao)
+                eh_complexo = intencao.get("complexidade") == "alta"
+                precisa_calculo = intencao.get("calculo") == True
+                
+                # Prepara Inputs
                 df_atual = st.session_state["df_final"]
                 rows, cols = df_atual.shape
                 origem_dados = "Demo" if st.session_state.get("modo_demo") else "Upload"
                 
                 temp_path = salvar_temp_csv(df_atual)
+                # Adiciona caminho ao session state para uso no exec
+                st.session_state["temp_csv_path"] = temp_path 
+                
                 buffer = [f"Colunas: {list(df_atual.columns)}", df_atual.head(3).to_markdown(index=False)]
                 user_req = f"Usuário: {nome_atual}. Pedido: {instrucao}"
                 inputs = {'file_path': temp_path, 'user_request': user_req, 'data_summary': "\n".join(buffer)}
                 
                 est_tokens_in = len(str(inputs)) / 4
                 
-                # Execução
+                # 2. EXECUÇÃO DO FLUXO PRINCIPAL (Visual)
                 with contextlib.redirect_stdout(log_buffer):
-                    result = StoryVisCrew().crew().kickoff(inputs=inputs)
+                    if eh_complexo:
+                        st.toast("Modo Visual Avançado Ativado! 🔥", icon="🎨")
+                        status.write("Gerando visualização complexa...")
+                        result = StoryVisCrew().crew_complex().kickoff(inputs=inputs)
+                    else:
+                        status.write("Gerando visualização padrão...")
+                        result = StoryVisCrew().crew().kickoff(inputs=inputs)
                 
                 raw = result.raw
                 narrativa, codigo_sujo = separar_narrativa_codigo(raw)
                 codigo_limpo = limpar_codigo_ia(codigo_sujo)
 
+                # 3. EXECUÇÃO DO FLUXO DE CÁLCULO (Opcional)
+                codigo_calc_limpo = ""
+                if precisa_calculo:
+                    status.write("🧮 Calculando métricas exatas (Pandas)...")
+                    try:
+                        res_calc = StoryVisCrew().crew_calculation().kickoff(inputs=inputs)
+                        # Tenta limpar, mas se não for código, usa o texto puro
+                        codigo_calc_limpo = limpar_codigo_ia(res_calc.raw)
+                        if not codigo_calc_limpo: # Se limpou demais, pega o raw
+                            codigo_calc_limpo = res_calc.raw
+                    except Exception as e_calc:
+                        print(f"Erro no cálculo: {e_calc}")
+
+                # 4. Atualização de Estado
                 st.session_state["codigo_final"] = codigo_limpo
+                st.session_state["codigo_calculo"] = codigo_calc_limpo
                 st.session_state["narrativa_final"] = narrativa
                 st.session_state["editor_codigo_area"] = codigo_limpo 
                 st.session_state["modo_demo"] = False
@@ -149,11 +224,13 @@ with tab_dash:
                 status.update(label=f"Concluído em {tempo_total:.2f}s!", state="complete", expanded=False)
 
                 if LOGGING_ATIVO:
+                    tipo_acao = "CREATE_COMPLEX" if eh_complexo else "CREATE"
                     salvar_log_pinecone(
-                        usuario=nome_atual, input_usuario=instrucao, output_ia=codigo_limpo,
-                        output_narrativa=narrativa, status="Sucesso", execution_time=tempo_total,
+                        usuario=nome_atual, input_usuario=instrucao, 
+                        output_ia=codigo_limpo, output_narrativa=narrativa,
+                        status="Sucesso", execution_time=tempo_total,
                         terminal_log=terminal_output, dataset_rows=rows, dataset_cols=cols,
-                        data_source=origem_dados, action_type="CREATE",
+                        data_source=origem_dados, action_type=tipo_acao,
                         est_input_tokens=est_tokens_in, est_output_tokens=est_tokens_out
                     )
 
@@ -177,13 +254,45 @@ with tab_dash:
         st.markdown("#### 📊 Resultado")
         if st.session_state["codigo_final"]:
             try:
-                local_ctx = {"pd": pd, "st": st, "alt": alt, "df": st.session_state["df_final"]}
+                # Injeta variáveis essenciais no contexto local
+                local_ctx = {
+                    "pd": pd, 
+                    "st": st, 
+                    "alt": alt, 
+                    "df": st.session_state["df_final"],
+                    "file_path": st.session_state.get("temp_csv_path", "") # Injeta o caminho do arquivo
+                }
                 exec(st.session_state["codigo_final"], globals(), local_ctx)
             except Exception as e:
                 st.warning("⚠️ O código gerado contém erros ou os dados mudaram.")
                 with st.expander("Ver erro técnico"): st.write(e)
         else:
             st.info("O gráfico aparecerá aqui.")
+
+    # --- Área de Cálculos (Scorecards) ---
+    if st.session_state.get("codigo_calculo"):
+        st.markdown("---")
+        container_calc = st.container(border=True)
+        with container_calc:
+            st.markdown("#### 🧮 Destaques Calculados")
+            calc_content = st.session_state["codigo_calculo"]
+            
+            # Verificação Inteligente: É código ou texto?
+            if is_python_code(calc_content):
+                try:
+                    local_ctx_calc = {
+                        "pd": pd, "st": st, 
+                        "df": st.session_state["df_final"],
+                        "file_path": st.session_state.get("temp_csv_path", "")
+                    }
+                    exec(calc_content, globals(), local_ctx_calc)
+                except Exception as e:
+                    st.warning("Erro ao executar cálculo matemático.")
+                    # Se falhar, mostra o código para debug
+                    with st.expander("Ver código do cálculo"): st.code(calc_content)
+            else:
+                # Se não for código, assume que o agente respondeu em texto direto
+                st.write(calc_content)
 
     # --- Área Evolução ---
     if st.session_state["codigo_final"]:
@@ -260,19 +369,18 @@ with tab_insights:
     else:
         st.info("O relatório da Gramática dos Gráficos aparecerá aqui.")
 
+# -------------------------------------------------------
+# ABA 4: FEEDBACK
+# -------------------------------------------------------
 with tab_feedback:
-    st.subheader(" Feedback")
-
-    nome_feedback = st.session_state.get("nome_participante", "").strip()
+    st.subheader("🗣️ Deixe sua opinião")
     
+    nome_feedback = st.session_state.get("nome_participante", "").strip()
     if not nome_feedback:
         st.warning("⚠️ **Atenção:** Você precisa preencher seu **Nome** na aba '✏️ Dados' para poder enviar feedback.")
 
     with st.form("form_feedback"):
         st.write("O que achou da análise?")
-        
-        # --- MUDANÇA AQUI: ESTRELAS NATIVAS ---
-        # st.feedback retorna: 0, 1, 2, 3, 4 (ou None se não clicou)
         feedback_stars = st.feedback("stars")
         
         comentario = st.text_area(
@@ -280,37 +388,31 @@ with tab_feedback:
             placeholder="Ex: O gráfico ficou ótimo, mas a cor estava ruim..."
         )
         
-        # Botão de envio
         enviou = st.form_submit_button(
             "Enviar Avaliação", 
             type="primary",
-            disabled=(not nome_feedback) # True se vazio, False se tiver nome
+            disabled=(not nome_feedback)
         )
         
         if enviou:
             if LOGGING_ATIVO:
-                # Lógica para converter 0-4 para 1-5
-                # Se for None (usuário não clicou), assumimos 0 ou tratamos como erro
                 nota_final = (feedback_stars + 1) if feedback_stars is not None else 0
                 
                 if nota_final > 0:
-                    user_feedback = st.session_state.get("nome_participante", "Anônimo")
-                    
                     salvou = salvar_feedback_pinecone(
-                        usuario=user_feedback,
-                        estrelas=nota_final, # Salva 1 a 5
+                        usuario=nome_feedback,
+                        estrelas=nota_final,
                         comentario=comentario
                     )
                     
                     if salvou:
                         st.toast("Obrigado pelo feedback! 🌟", icon="✅")
-                        time.sleep(2)
-                        st.rerun() # Limpa o form
+                        time.sleep(1.5)
+                        st.rerun()
                 else:
                     st.warning("Por favor, selecione as estrelas antes de enviar.")
             else:
                 st.error("Erro: Logger desativado.")
-
 
 st.divider()
 st.caption("LABVIS - UFPA © 2025")
