@@ -29,6 +29,14 @@ develop_code_task:
     7. IDIOMA: Todo o texto visível (títulos, eixos, tooltips) DEVE estar em PORTUGUÊS DO BRASIL.
     8. ZOOM: Adicione '.interactive()' em TODOS os gráficos Altair.
     9. COR: Sempre que possível, use 'color' para diferenciar categorias.
+    10. KPI CARDS (SCORECARDS): Antes de qualquer gráfico, crie uma linha de métricas usando 'st.columns()'.
+        - Identifique a coluna numérica principal (ex: contagem de registros, valores, notas).
+        - Mostre 3 ou 4 cartões usando 'st.metric()':
+            1. Total Geral (Contagem de linhas ou Soma da coluna principal).
+            2. Média ou Valor Máximo encontrado.
+            3. Nome do item Líder (o valor mais frequente na coluna categórica principal).
+            4. Diversidade (Contagem de valores únicos/Nunique).
+        - Formate números grandes com separador de milhar: f"{valor:,.0f}".replace(",", ".")
   expected_output: >
     Apenas o código Python válido.
 
