@@ -52,7 +52,7 @@ O sistema foi otimizado para operar com uma equipe enxuta e eficiente de agentes
     Crie um arquivo `.env` na raiz do projeto e adicione sua chave da Groq:
     ```env
     GROQ_API_KEY=sua_chave_aqui
-    GROQ_MODEL=llama-3.1-8b-instant
+    GROQ_MODEL=meta-llama/llama-4-maverick-17b-128e-instruct
     BASE_URL=https://api.groq.com/openai/v1
     
     # Opcional (para logs)
@@ -89,9 +89,3 @@ StoryVis/
 └── knowledge/              # Base de conhecimento para o RAG
 ```
 
-## 🤝 Contribuição
-
-Sinta-se à vontade para abrir issues e pull requests para melhorias no projeto.
-
----
-Desenvolvido com ❤️ usando [CrewAI](https://crewai.com) e [Streamlit](https://streamlit.io).
