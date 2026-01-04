@@ -25,7 +25,8 @@ try:
     from src.app.services.logger import salvar_log_pinecone, salvar_feedback_pinecone
     from src.app.utils import (
         carregar_dados, salvar_temp_csv, limpar_codigo_ia, 
-        separar_narrativa_codigo, inicializar_session_state
+        separar_narrativa_codigo, inicializar_session_state,
+        buscar_coordenadas_ia, detectar_coluna_geo_ia
     )
     from src.app.demo import carregar_demo_inicial
     
@@ -92,14 +93,16 @@ tab_dados, tab_dash, tab_insights, tab_feedback = st.tabs([
 with tab_dados:
     st.subheader("Preparação dos Dados")
     
+    # --- Upload e Nome ---
     col_nome, col_upload = st.columns([1, 2], gap="medium")
     with col_nome:
-        nome_input = st.text_input("👤 Nome Completo (Obrigatório)", placeholder="Digite seu nome aqui...")
+        nome_input = st.text_input("👤 Nome Completo (Obrigatório)", placeholder="Digite seu nome...", key="input_nome_user")
         st.session_state["nome_participante"] = nome_input
         
     with col_upload:
         uploaded_file = st.file_uploader("📂 Carregar Arquivo Próprio", type=["csv", "xlsx", "xls"])
 
+    # --- Processamento do Upload ---
     if uploaded_file:
         if "arquivo_cache" not in st.session_state or st.session_state["arquivo_cache"] != uploaded_file.name:
             df_loaded = carregar_dados(uploaded_file)
@@ -109,34 +112,82 @@ with tab_dados:
                 st.session_state["arquivo_cache"] = uploaded_file.name
                 st.session_state["modo_demo"] = False
                 
-                # Reset limpo
+                # Resets
                 st.session_state["codigo_final"] = ""
                 st.session_state["codigo_calculo"] = "" 
                 st.session_state["narrativa_final"] = ""
-                st.session_state["editor_codigo_area"] = ""
-                
                 st.toast("Arquivo carregado!", icon="✅")
 
     st.divider()
 
-    col_tit, col_btn = st.columns([3, 1])
+    # ==========================================================
+    # 🧠 ÁREA DE INTELIGÊNCIA GEOGRÁFICA (AGORA NO TOPO)
+    # ==========================================================
+    
+    # 1. Detecta silenciosamente usando o DF atual
+    df_atual = st.session_state["df_final"]
+    col_geo_sugerida = detectar_coluna_geo_ia(df_atual)
+
+    # 2. Se detectar, mostra o painel DESTAQUE antes da tabela
+    if col_geo_sugerida:
+        with st.container(border=True):
+            cols_geo_ui = st.columns([0.7, 0.3])
+            
+            with cols_geo_ui[0]:
+                st.markdown(f"### 🌍 Inteligência Geográfica Ativa")
+                st.info(f"Detectamos a coluna **`{col_geo_sugerida}`**. Deseja adicionar coordenadas (Lat/Lon) automaticamente?")
+                
+            with cols_geo_ui[1]:
+                st.write("") # Espaçamento
+                st.write("") 
+                if st.button("✨ Sim, Mapear Agora!", type="primary", use_container_width=True):
+                    locais = df_atual[col_geo_sugerida].dropna().unique().tolist()
+                    
+                    with st.status(f"🤖 IA processando {len(locais)} locais...", expanded=True) as status:
+                        coords = buscar_coordenadas_ia(locais)
+                        
+                        if coords:
+                            df_temp = df_atual.copy()
+                            # Mapping seguro
+                            df_temp['Latitude'] = df_temp[col_geo_sugerida].map(lambda x: (coords.get(x) or {}).get('lat'))
+                            df_temp['Longitude'] = df_temp[col_geo_sugerida].map(lambda x: (coords.get(x) or {}).get('lon'))
+                            
+                            # Conversão numérica obrigatória
+                            df_temp['Latitude'] = pd.to_numeric(df_temp['Latitude'], errors='coerce')
+                            df_temp['Longitude'] = pd.to_numeric(df_temp['Longitude'], errors='coerce')
+                            
+                            st.session_state["df_final"] = df_temp
+                            status.update(label="✅ Mapa Gerado!", state="complete")
+                            time.sleep(1)
+                            st.rerun() # Recarrega a página para mostrar a tabela atualizada
+                        else:
+                            st.error("Erro na geocodificação.")
+
+    # ==========================================================
+    # 📊 ÁREA DA TABELA (ABAIXO DA INTELIGÊNCIA)
+    # ==========================================================
+    
+    col_tit, col_btn_res = st.columns([3, 1])
     with col_tit:
         origem = "Demo" if st.session_state.get("modo_demo") else "Seu Arquivo"
         st.markdown(f"**Tabela de Dados ({origem})**")
-    with col_btn:
-        if st.button("🔄 Restaurar Demo", width="stretch"):
+    
+    with col_btn_res:
+        if st.button("🔄 Restaurar Demo", use_container_width=True):
             df_d, cod_d, narr_d = carregar_demo_inicial()
             st.session_state["df_final"] = df_d
-            st.session_state["codigo_final"] = cod_d
-            st.session_state["codigo_calculo"] = ""
-            st.session_state["narrativa_final"] = narr_d
-            st.session_state["editor_codigo_area"] = cod_d
             st.session_state["modo_demo"] = True
             st.rerun()
 
-    df_editado = st.data_editor(st.session_state["df_final"], width="stretch", num_rows="dynamic")
+    # Editor de dados (Agora com a key para evitar erro de ID)
+    df_editado = st.data_editor(
+        st.session_state["df_final"], 
+        width="stretch", 
+        num_rows="dynamic",
+        key="main_data_editor"
+    )
+    # Atualiza o estado se houver edição manual
     st.session_state["df_final"] = df_editado
-
 # -------------------------------------------------------
 # ABA 2: DASHBOARD + MONITORAMENTO
 # -------------------------------------------------------

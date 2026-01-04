@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 import tempfile
 import re
+import time
+import os
+import json
+from crewai import LLM
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def carregar_dados(uploaded_file):
@@ -67,3 +71,133 @@ def inicializar_session_state(demo_func):
         st.session_state["editor_codigo_area"] = cod_demo
         st.session_state["modo_demo"] = True
         st.session_state["nome_participante"] = ""
+
+# --- 1. CONFIGURAÇÃO CENTRALIZADA DO LLM ---
+def get_llm():
+    """Retorna uma instância configurada do LLM (Groq) pronta para uso."""
+    modelo_env = os.getenv("GROQ_MODEL", "")
+    # Tratamento para prefixo do LiteLLM
+    modelo_final = f"groq/{modelo_env}" if not modelo_env.startswith("groq/") else modelo_env
+    
+    return LLM(
+        model=modelo_final,
+        temperature=0, # Zero para máxima precisão lógica
+        api_key=os.getenv("GROQ_API_KEY")
+    )
+
+# --- 2. DETECÇÃO INTELIGENTE DE COLUNAS (IA) ---
+def detectar_coluna_geo_ia(df):
+    """
+    Estratégia Híbrida v2:
+    1. Busca por palavras-chave expandida (Plurais, sem acento, prefixos comuns).
+    2. Fallback para IA se nada óbvio for encontrado.
+    """
+    # Se já tem coordenadas, não faz nada
+    if any(c.lower() in ['latitude', 'longitude', 'lat', 'lon'] for c in df.columns):
+        return None
+
+    colunas = list(df.columns)
+    
+    # --- FASE 1: BUSCA RÁPIDA (Expandida) ---
+    # Adicionamos plurais e variações sem acento
+    termos_comuns = [
+        'município', 'municipio', 'municípios', 'municipios',
+        'cidade', 'cidades', 'city', 'cities',
+        'nm_mun', 'no_municipio', 'nome_municipio', 'nom_municipio',
+        'localidade', 'local', 'cidade/uf', 'municipio_residencia'
+    ]
+    
+    # 1. Busca Exata (case insensitive)
+    for col in colunas:
+        if col.lower().strip() in termos_comuns:
+            return col
+            
+    # 2. Busca Parcial (ex: "Nome dos Municipios")
+    for col in colunas:
+        c_lower = col.lower()
+        for termo in termos_comuns:
+            # Verifica se o termo está contido na coluna (mas evita falsos positivos curtos)
+            if termo in c_lower:
+                return col
+
+    # --- FASE 2: INTELIGÊNCIA ARTIFICIAL (Fallback) ---
+    # Só aciona o LLM se a busca simples falhar
+    try:
+        llm = get_llm()
+        amostra = df.head(3).to_dict(orient='records')
+        
+        prompt = f"""
+        Analise estas colunas: {colunas}
+        Amostra: {amostra}
+
+        Tarefa: Qual coluna representa o NOME DA CIDADE ou MUNICÍPIO?
+        
+        Responda APENAS JSON: {{ "coluna_encontrada": "nome_exato_da_coluna" }}
+        Se nada servir, {{ "coluna_encontrada": null }}
+        """
+        
+        res = llm.call([{"role": "user", "content": prompt}])
+        match = re.search(r'(\{.*\})', res, re.DOTALL)
+        if match:
+            dados = json.loads(match.group(1))
+            return dados.get("coluna_encontrada")
+            
+    except Exception as e:
+        print(f"Erro no fallback IA: {e}")
+    
+    return None
+
+# --- 3. GEOCODIFICAÇÃO EM LOTES (IA) ---
+def buscar_coordenadas_ia(lista_locais):
+    """Geocodifica com estratégia de Rate Limit (Freio) para evitar erros da Groq."""
+    llm = get_llm()
+    dicionario_mestre = {}
+    
+    # 1. REDUÇÃO DRÁSTICA DO LOTE
+    # De 20 para 5. Isso garante que cada requisição use poucos tokens.
+    tamanho_lote = 5 
+    lotes = [lista_locais[i:i + tamanho_lote] for i in range(0, len(lista_locais), tamanho_lote)]
+    
+    print(f"DEBUG: Processando {len(lista_locais)} locais em {len(lotes)} lotes...")
+
+    for i, lote in enumerate(lotes):
+        prompt = f"""
+        Tarefa: Lat/Lon decimal para: {lote}.
+        JSON Obrigatório: {{ "Nome do Local": {{ "lat": -10.0, "lon": -50.0 }} }}
+        Use null se não souber.
+        """
+        
+        # Lógica de RETRY (Tentativas)
+        tentativas = 0
+        max_tentativas = 3
+        sucesso_lote = False
+        
+        while tentativas < max_tentativas and not sucesso_lote:
+            try:
+                res = llm.call([{"role": "user", "content": prompt}])
+                
+                # Extração do JSON
+                match = re.search(r'(\{.*\})', res, re.DOTALL)
+                if match:
+                    dados_lote = json.loads(match.group(1))
+                    dicionario_mestre.update(dados_lote)
+                
+                sucesso_lote = True
+                print(f"✅ Lote {i+1}/{len(lotes)} processado.")
+                
+                # 2. FREIO DE MÃO (Sleep maior)
+                # Espera 3 segundos para garantir que o TPM baixe
+                time.sleep(3) 
+
+            except Exception as e:
+                erro_str = str(e).lower()
+                if "rate limit" in erro_str or "429" in erro_str:
+                    tempo_espera = 15 # Espera 15 segundos se bater no teto
+                    print(f"⚠️ Rate Limit atingido no lote {i+1}. Esfriando por {tempo_espera}s... (Tentativa {tentativas+1})")
+                    time.sleep(tempo_espera)
+                    tentativas += 1
+                else:
+                    print(f"❌ Erro fatal no lote {i+1}: {e}")
+                    break # Se não for rate limit, aborta o lote
+            
+    return dicionario_mestre
