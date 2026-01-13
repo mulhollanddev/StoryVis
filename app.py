@@ -121,47 +121,80 @@ with tab_dados:
     st.divider()
 
     # ==========================================================
-    # 🧠 ÁREA DE INTELIGÊNCIA GEOGRÁFICA (AGORA NO TOPO)
+    # 🧠 ÁREA DE INTELIGÊNCIA GEOGRÁFICA (VISUAL NOVO)
     # ==========================================================
     
     # 1. Detecta silenciosamente usando o DF atual
     df_atual = st.session_state["df_final"]
     col_geo_sugerida = detectar_coluna_geo_ia(df_atual)
 
-    # 2. Se detectar, mostra o painel DESTAQUE antes da tabela
+    # 2. Se detectar, mostra o novo layout
     if col_geo_sugerida:
-        with st.container(border=True):
-            cols_geo_ui = st.columns([0.7, 0.3])
+        # Cálculos prévios
+        locais_unicos = df_atual[col_geo_sugerida].dropna().unique().tolist()
+        qtd_locais = len(locais_unicos)
+        LIMITE_MAXIMO = 30
+        
+        # --- A. O ALERTA AMARELO (Visualização rápida) ---
+        st.warning(
+            f"📍 **Inteligência Geográfica:** Detectamos a coluna `{col_geo_sugerida}` com **{qtd_locais}** locais únicos.", 
+            icon="🌍"
+        )
+        
+        # --- B. O EXPANDER (A "coluna que abaixa e levanta") ---
+        with st.expander("🌍 Clique aqui para utilizar Inteligência Geográfica e gerar mapas"):
             
-            with cols_geo_ui[0]:
-                st.markdown(f"### 🌍 Inteligência Geográfica Ativa")
-                st.info(f"Detectamos a coluna **`{col_geo_sugerida}`**. Deseja adicionar coordenadas (Lat/Lon) automaticamente?")
-                
-            with cols_geo_ui[1]:
-                st.write("") # Espaçamento
-                st.write("") 
-                if st.button("✨ Sim, Mapear Agora!", type="primary", use_container_width=True):
-                    locais = df_atual[col_geo_sugerida].dropna().unique().tolist()
+            st.markdown("""
+            <small>A IA irá buscar Latitude, Longitude e Códigos de Área (Estados/Países) 
+            para permitir a criação de mapas de pontos e mapas de calor (coropléticos).</small>
+            """, unsafe_allow_html=True)
+            
+            st.write("") # Espaço para respiro
+            
+            # Lógica da Trava de Segurança
+            if qtd_locais > LIMITE_MAXIMO:
+                st.error(
+                    f"⚠️ **Limite excedido para processamento via IA.**\n\n"
+                    f"Você possui **{qtd_locais}** locais únicos, mas o limite é **{LIMITE_MAXIMO}**.\n"
+                    "Por favor, filtre seus dados (ex: selecione apenas um ano ou região) para habilitar o mapeamento."
+                )
+            else:
+                # Botão (Só aparece se estiver dentro do limite)
+                if st.button("✨ Iniciar Mapeamento Automático", type="primary", use_container_width=True):
                     
-                    with st.status(f"🤖 IA processando {len(locais)} locais...", expanded=True) as status:
-                        coords = buscar_coordenadas_ia(locais)
+                    with st.status(f"🤖 IA analisando {qtd_locais} locais...", expanded=True) as status:
+                        coords = buscar_coordenadas_ia(locais_unicos)
                         
                         if coords:
                             df_temp = df_atual.copy()
-                            # Mapping seguro
-                            df_temp['Latitude'] = df_temp[col_geo_sugerida].map(lambda x: (coords.get(x) or {}).get('lat'))
-                            df_temp['Longitude'] = df_temp[col_geo_sugerida].map(lambda x: (coords.get(x) or {}).get('lon'))
                             
-                            # Conversão numérica obrigatória
+                            # Função auxiliar blindada
+                            def get_safe(local, key):
+                                dados = coords.get(local)
+                                if isinstance(dados, dict):
+                                    return dados.get(key)
+                                return None
+
+                            # 1. Injeta PONTOS
+                            df_temp['Latitude'] = df_temp[col_geo_sugerida].apply(lambda x: get_safe(x, 'lat'))
+                            df_temp['Longitude'] = df_temp[col_geo_sugerida].apply(lambda x: get_safe(x, 'lon'))
+                            
+                            # 2. Injeta ÁREAS (GeoCode/ISO)
+                            df_temp['geo_code'] = df_temp[col_geo_sugerida].apply(lambda x: get_safe(x, 'geo_code'))
+                            df_temp['country_iso'] = df_temp[col_geo_sugerida].apply(lambda x: get_safe(x, 'country_iso'))
+                            
+                            # 3. Limpeza de Tipos
                             df_temp['Latitude'] = pd.to_numeric(df_temp['Latitude'], errors='coerce')
                             df_temp['Longitude'] = pd.to_numeric(df_temp['Longitude'], errors='coerce')
+                            df_temp['geo_code'] = df_temp['geo_code'].fillna('').astype(str).replace({'nan': '', 'None': ''})
+                            df_temp['country_iso'] = df_temp['country_iso'].fillna('').astype(str).replace({'nan': '', 'None': ''})
                             
                             st.session_state["df_final"] = df_temp
-                            status.update(label="✅ Mapa Gerado!", state="complete")
+                            status.update(label="✅ Dados Geográficos Completos!", state="complete")
                             time.sleep(1)
-                            st.rerun() # Recarrega a página para mostrar a tabela atualizada
+                            st.rerun()
                         else:
-                            st.error("Erro na geocodificação.")
+                            st.error("Erro: A IA não retornou dados válidos.")
 
     # ==========================================================
     # 📊 ÁREA DA TABELA (ABAIXO DA INTELIGÊNCIA)

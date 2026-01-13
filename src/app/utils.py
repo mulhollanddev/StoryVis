@@ -88,52 +88,62 @@ def get_llm():
 # --- 2. DETECÇÃO INTELIGENTE DE COLUNAS (IA) ---
 def detectar_coluna_geo_ia(df):
     """
-    Estratégia Híbrida v2:
-    1. Busca por palavras-chave expandida (Plurais, sem acento, prefixos comuns).
-    2. Fallback para IA se nada óbvio for encontrado.
+    Estratégia Híbrida v3:
+    Identifica qual coluna serve de FONTE (Input) para a geocodificação.
     """
-    # Se já tem coordenadas, não faz nada
-    if any(c.lower() in ['latitude', 'longitude', 'lat', 'lon'] for c in df.columns):
+    colunas = list(df.columns)
+    colunas_lower = [c.lower() for c in colunas]
+
+    # 1. VERIFICAÇÃO DE CONCLUSÃO (ATUALIZADO)
+    # Se a coluna 'geo_code' (chave para o Altair) já existe, 
+    # significa que já processamos essa planilha. O detetive pode descansar.
+    if 'geo_code' in colunas_lower:
         return None
 
-    colunas = list(df.columns)
-    
-    # --- FASE 1: BUSCA RÁPIDA (Expandida) ---
-    # Adicionamos plurais e variações sem acento
+    # --- FASE 1: BUSCA RÁPIDA (Palavras-Chave Expandida) ---
+    # Procuramos colunas que contenham nomes de locais (Input)
     termos_comuns = [
+        # Cidades/Municípios
         'município', 'municipio', 'municípios', 'municipios',
         'cidade', 'cidades', 'city', 'cities',
         'nm_mun', 'no_municipio', 'nome_municipio', 'nom_municipio',
-        'localidade', 'local', 'cidade/uf', 'municipio_residencia'
+        'localidade', 'local', 'cidade/uf', 'municipio_residencia',
+        
+        # Estados/UFs (Importante para mapas de área)
+        'estado', 'estados', 'state', 'states',
+        'uf', 'sg_uf', 'sigla_uf', 'nm_uf', 'nome_estado',
+        
+        # Países
+        'país', 'pais', 'country', 'countries', 'nacao', 'nation', 'territorio'
     ]
     
-    # 1. Busca Exata (case insensitive)
+    # A. Busca Exata (O nome da coluna é exatamente "Cidade")
     for col in colunas:
         if col.lower().strip() in termos_comuns:
             return col
             
-    # 2. Busca Parcial (ex: "Nome dos Municipios")
+    # B. Busca Parcial (O nome da coluna contém "Cidade", ex: "Cidade Nascimento")
     for col in colunas:
         c_lower = col.lower()
         for termo in termos_comuns:
-            # Verifica se o termo está contido na coluna (mas evita falsos positivos curtos)
-            if termo in c_lower:
+            # Verifica se o termo está contido e tem tamanho mínimo para evitar falsos positivos
+            if termo in c_lower and len(c_lower) > 2:
                 return col
 
     # --- FASE 2: INTELIGÊNCIA ARTIFICIAL (Fallback) ---
-    # Só aciona o LLM se a busca simples falhar
+    # Se os nomes forem estranhos (ex: "Zona_X"), a IA analisa o CONTEÚDO.
     try:
         llm = get_llm()
         amostra = df.head(3).to_dict(orient='records')
         
         prompt = f"""
         Analise estas colunas: {colunas}
-        Amostra: {amostra}
+        Amostra de dados: {amostra}
 
-        Tarefa: Qual coluna representa o NOME DA CIDADE ou MUNICÍPIO?
+        TAREFA: Qual coluna contém NOMES DE LUGARES (Cidades, Estados ou Países)?
         
         Responda APENAS JSON: {{ "coluna_encontrada": "nome_exato_da_coluna" }}
-        Se nada servir, {{ "coluna_encontrada": null }}
+        Se nada servir, responda: {{ "coluna_encontrada": null }}
         """
         
         res = llm.call([{"role": "user", "content": prompt}])
@@ -149,25 +159,44 @@ def detectar_coluna_geo_ia(df):
 
 # --- 3. GEOCODIFICAÇÃO EM LOTES (IA) ---
 def buscar_coordenadas_ia(lista_locais):
-    """Geocodifica com estratégia de Rate Limit (Freio) para evitar erros da Groq."""
+    """
+    Geocodifica com estratégia de Rate Limit e traz chaves para Altair (geo_code).
+    """
     llm = get_llm()
     dicionario_mestre = {}
     
-    # 1. REDUÇÃO DRÁSTICA DO LOTE
-    # De 20 para 5. Isso garante que cada requisição use poucos tokens.
+    # Mantemos lote pequeno
     tamanho_lote = 5 
     lotes = [lista_locais[i:i + tamanho_lote] for i in range(0, len(lista_locais), tamanho_lote)]
     
-    print(f"DEBUG: Processando {len(lista_locais)} locais em {len(lotes)} lotes...")
+    print(f"DEBUG: Processando {len(lista_locais)} locais...")
 
     for i, lote in enumerate(lotes):
+        # --- PROMPT ATUALIZADO PARA ALTAIR ---
+        # Pedimos geo_code (Sigla) além de Lat/Lon
         prompt = f"""
-        Tarefa: Lat/Lon decimal para: {lote}.
-        JSON Obrigatório: {{ "Nome do Local": {{ "lat": -10.0, "lon": -50.0 }} }}
-        Use null se não souber.
+        Analise a lista: {lote}
+        
+        TAREFA: Retorne JSON com Lat/Lon e CÓDIGOS DE MAPA.
+        
+        REGRAS:
+        1. 'geo_code': A Sigla do Estado/Província (ex: "SP", "PA", "NY"). 
+           (ISSO É OBRIGATÓRIO PARA O MAPA COROPLÉTICO).
+        2. 'country_iso': Código ISO Alpha-3 do País (ex: "BRA").
+        3. 'lat'/'lon': Decimais.
+        
+        FORMATO JSON PURO:
+        {{
+           "Nome do Local": {{ 
+               "lat": -1.45, 
+               "lon": -48.50, 
+               "geo_code": "PA",
+               "country_iso": "BRA"
+           }}
+        }}
         """
         
-        # Lógica de RETRY (Tentativas)
+        # --- Lógica de Retry e Sleep (Mantida igual à sua) ---
         tentativas = 0
         max_tentativas = 3
         sucesso_lote = False
@@ -176,28 +205,21 @@ def buscar_coordenadas_ia(lista_locais):
             try:
                 res = llm.call([{"role": "user", "content": prompt}])
                 
-                # Extração do JSON
                 match = re.search(r'(\{.*\})', res, re.DOTALL)
                 if match:
-                    dados_lote = json.loads(match.group(1))
-                    dicionario_mestre.update(dados_lote)
+                    dicionario_mestre.update(json.loads(match.group(1)))
                 
                 sucesso_lote = True
-                print(f"✅ Lote {i+1}/{len(lotes)} processado.")
-                
-                # 2. FREIO DE MÃO (Sleep maior)
-                # Espera 3 segundos para garantir que o TPM baixe
-                time.sleep(3) 
+                print(f"✅ Lote {i+1} OK.")
+                time.sleep(3) # Freio
 
             except Exception as e:
-                erro_str = str(e).lower()
-                if "rate limit" in erro_str or "429" in erro_str:
-                    tempo_espera = 15 # Espera 15 segundos se bater no teto
-                    print(f"⚠️ Rate Limit atingido no lote {i+1}. Esfriando por {tempo_espera}s... (Tentativa {tentativas+1})")
-                    time.sleep(tempo_espera)
+                if "rate limit" in str(e).lower():
+                    print(f"⚠️ Rate Limit. Esfriando 15s...")
+                    time.sleep(15)
                     tentativas += 1
                 else:
-                    print(f"❌ Erro fatal no lote {i+1}: {e}")
-                    break # Se não for rate limit, aborta o lote
+                    print(f"❌ Erro: {e}")
+                    break 
             
     return dicionario_mestre
