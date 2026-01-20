@@ -83,6 +83,8 @@ StoryVis/
 │   ├── app/
 │   │   ├── crew.py         # Orquestração da CrewAI (Storyteller & Dashboard Developer)
 │   │   ├── config/         # Configurações dos Agentes e Tarefas (YAML)
+|   |       ├── agents.yalm # Prompts dos agentes
+│   │       ├── tasks.yaml  # Prompts de tarefas
 │   │   ├── services/       # Lógica de RAG e Modelos
 │   │   └── tools/          # Ferramentas personalizadas
 │   └── logs/               # Logs de execução
