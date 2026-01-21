@@ -463,7 +463,7 @@ with tab_feedback:
     # --- 1. Verificação de Identidade ---
     nome_feedback = st.session_state.get("nome_participante", "").strip()
     if not nome_feedback:
-        st.warning("⚠️ **Bloqueio de Segurança:** Para participar da pesquisa, preencha seu **Nome** na aba '✏️ Dados'.")
+        st.warning("⚠️ Para participar da pesquisa, preencha seu **Nome** na aba '✏️ Dados'.")
     else:
         st.success(f"Participante Identificado: **{nome_feedback}**")
 
@@ -471,55 +471,83 @@ with tab_feedback:
     with st.form("form_feedback"):
         
         # =======================================
-        # BLOCO A: PERFIL DEMOGRÁFICO (NOVO!)
+        # BLOCO A: PERFIL DEMOGRÁFICO
         # =======================================
-        st.markdown("### 1. Perfil Demográfico")
-        st.caption("Dados estatísticos para caracterização da amostra da pesquisa.")
+        st.markdown("### 1. Perfil do Participante")
         
         col_demo1, col_demo2 = st.columns(2)
-        
         with col_demo1:
             sexo = st.selectbox(
                 "Sexo:", 
                 ["Masculino", "Feminino", "Prefiro não informar", "Outro"],
-                index=None,
-                placeholder="Selecione..."
+                index=None, placeholder="Selecione..."
             )
             idade_faixa = st.selectbox(
                 "Faixa Etária:",
                 ["18-24 anos", "25-34 anos", "35-44 anos", "45-54 anos", "55+ anos"],
-                index=None,
-                placeholder="Selecione..."
+                index=None, placeholder="Selecione..."
             )
 
         with col_demo2:
             escolaridade = st.selectbox(
                 "Nível de Escolaridade:", 
                 ["Ensino Médio", "Graduação (Cursando)", "Graduação (Completo)", "Pós-Graduação (Mestrado/Doutorado)"],
-                index=None,
-                placeholder="Selecione..."
+                index=None, placeholder="Selecione..."
             )
             area_atuacao = st.selectbox(
                 "Área de Formação/Atuação:",
                 ["Ciências Exatas/Tecnologia", "Ciências Humanas/Sociais", "Ciências da Saúde/Biológicas", "Linguística/Letras/Artes", "Outra"],
-                index=None,
-                placeholder="Selecione..."
+                index=None, placeholder="Selecione..."
             )
 
         st.divider()
 
         # =======================================
-        # BLOCO B: AVALIAÇÃO DA FERRAMENTA
+        # BLOCO B: PERFIL TÉCNICO (NOVAS PERGUNTAS!)
         # =======================================
-        st.markdown("### 2. Avaliação da Experiência")
-        st.write("Qual sua nota geral para o StoryVis?")
-        feedback_stars = st.feedback("stars")
+        st.markdown("### 2. Perfil Técnico e Experiência")
+        st.caption("Ajude-nos a entender sua familiaridade com as tecnologias envolvidas.")
+
+        # Pergunta 1: Frequência de IA (Refinada)
+        freq_ai = st.select_slider(
+            "Com que frequência você utiliza IAs Generativas (ChatGPT, Gemini, etc.)?",
+            options=["Nunca utilizei", "Raramente", "Mensalmente", "Semanalmente", "Diariamente"],
+            value="Raramente"
+        )
         
-        st.markdown("#### Checklist de Funcionalidades Testadas")
-        st.caption("Marque o resultado das etapas que você realizou:")
+        col_tec1, col_tec2 = st.columns(2)
+        with col_tec1:
+            # Pergunta 2: Nível em Dados
+            nivel_dados = st.selectbox(
+                "Nível de conhecimento em Análise de Dados:",
+                ["Iniciante (Curioso)", "Básico (Entendo tabelas)", "Intermediário (Faço análises)", "Avançado/Especialista"],
+                index=None, placeholder="Selecione..."
+            )
+            
+        with col_tec2:
+            # Pergunta 3: Experiência com Gráficos
+            nivel_viz = st.selectbox(
+                "Experiência com criação de Gráficos/Dashboards:",
+                ["Nunca criei", "Básico (Excel simples)", "Intermediário (PowerBI/Tableau)", "Avançado (Programação/D3.js)"],
+                index=None, placeholder="Selecione..."
+            )
+
+        # Pergunta Extra (Sugestão): Programação
+        st.write("")
+        conhece_prog = st.radio(
+            "Você tem algum conhecimento de programação (Python, R, etc)?",
+            ["Não, nenhum", "Básico (Lógica)", "Sim, programo regularmente"],
+            horizontal=True
+        )
+
+        st.divider()
+
+        # =======================================
+        # BLOCO C: AVALIAÇÃO DA FERRAMENTA
+        # =======================================
+        st.markdown("### 3. Avaliação da Experiência (Checklist)")
         
         col_testes_A, col_testes_B = st.columns(2)
-        
         with col_testes_A:
             c1_resp = st.radio("1. Bloqueio de Segurança (Nome):", ["Funcionou", "Fiquei confuso", "Não testei"], index=2)
             c2_resp = st.radio("2. Gráfico Demo (IA):", ["Funcionou", "Deu erro", "Não testei"], index=2)
@@ -529,30 +557,42 @@ with tab_feedback:
             c4_resp = st.radio("4. Evolução (2º Gráfico):", ["Adicionou ok", "Substituiu o anterior", "Não testei"], index=2)
             c5_resp = st.radio("5. Edição de Código:", ["Funcionou", "Falhou", "Não testei"], index=2)
 
-        st.divider()
+        st.write("")
+        st.markdown("#### Nota Final")
+        st.write("Qual sua nota geral para o StoryVis?")
+        feedback_stars = st.feedback("stars")
         
-        st.markdown("### 3. Considerações Finais")
-        comentario = st.text_area("Comentários, sugestões ou bugs encontrados:", placeholder="Digite aqui...")
+        comentario = st.text_area("Comentários, sugestões ou bugs:", placeholder="Digite aqui...")
         
         # Botão de Envio
-        enviou = st.form_submit_button("✅ Enviar Pesquisa", type="primary", disabled=(not nome_feedback))
+        enviou = st.form_submit_button("✅ Enviar Pesquisa Completa", type="primary", disabled=(not nome_feedback))
         
         if enviou:
-            # Validação: Obriga a preencher os dados demográficos básicos
-            if not all([sexo, idade_faixa, escolaridade, area_atuacao]):
-                st.error("⚠️ Por favor, preencha todos os campos do **Perfil Demográfico** antes de enviar.")
+            # Validação dos campos obrigatórios
+            campos_demo_ok = all([sexo, idade_faixa, escolaridade, area_atuacao])
+            campos_tec_ok = all([nivel_dados, nivel_viz])
+            
+            if not campos_demo_ok or not campos_tec_ok:
+                st.error("⚠️ Por favor, preencha todos os campos de **Perfil Demográfico** e **Perfil Técnico**.")
             elif feedback_stars is None:
                 st.error("⚠️ Por favor, dê uma nota (estrelas) para a ferramenta.")
             else:
                 if LOGGING_ATIVO:
-                    # Prepara os pacotes de dados
                     nota_final = feedback_stars + 1
                     
-                    dados_demograficos = {
+                    # Agrupa TODO o perfil (Demográfico + Técnico) num dicionário só
+                    # Isso facilita para a função salvar sem precisar criar muitos argumentos novos
+                    dados_perfil_completo = {
+                        # Demográfico
                         "sexo": sexo,
                         "faixa_etaria": idade_faixa,
                         "escolaridade": escolaridade,
-                        "area": area_atuacao
+                        "area": area_atuacao,
+                        # Técnico (Novos!)
+                        "tec_freq_ai": freq_ai,
+                        "tec_nivel_dados": nivel_dados,
+                        "tec_nivel_viz": nivel_viz,
+                        "tec_prog": conhece_prog
                     }
                     
                     detalhes_cenarios = {
@@ -568,13 +608,13 @@ with tab_feedback:
                         usuario=nome_feedback,
                         estrelas=nota_final,
                         comentario=comentario,
-                        dados_demograficos=dados_demograficos, # <--- NOVO ARGUMENTO
+                        dados_demograficos=dados_perfil_completo, # Passamos tudo aqui
                         detalhes_tecnicos=detalhes_cenarios
                     )
                     
                     if salvou:
                         st.balloons()
-                        st.success("Pesquisa enviada com sucesso! Muito obrigado pela colaboração.")
+                        st.success("Pesquisa enviada com sucesso! Muito obrigado.")
                         time.sleep(2)
                         st.rerun()
                 else:
