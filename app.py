@@ -9,7 +9,7 @@ import time
 import io
 import contextlib
 import json
-from groq import Groq 
+#from groq import Groq 
 
 # ===============================================
 # Configuração da Página
@@ -246,9 +246,9 @@ with tab_dash:
         with st.status("🧠 Analisando requisição...", expanded=True) as status:
             try:
                 # 1. ROTEAMENTO DE INTENÇÃO
-                intencao = router_intencao(instrucao)
-                eh_complexo = intencao.get("complexidade") == "alta"
-                precisa_calculo = intencao.get("calculo") == True
+                #intencao = router_intencao(instrucao)
+                #eh_complexo = intencao.get("complexidade") == "alta"
+                precisa_calculo = False
                 
                 # Prepara Inputs
                 df_atual = st.session_state["df_final"]
@@ -267,6 +267,7 @@ with tab_dash:
                 
                 # 2. EXECUÇÃO DO FLUXO PRINCIPAL (Visual)
                 with contextlib.redirect_stdout(log_buffer):
+                    eh_complexo = False  # Temporariamente desativado
                     if eh_complexo:
                         st.toast("Modo Visual Avançado Ativado! 🔥", icon="🎨")
                         status.write("Gerando visualização complexa...")
@@ -457,46 +458,127 @@ with tab_insights:
 # ABA 4: FEEDBACK
 # -------------------------------------------------------
 with tab_feedback:
-    st.subheader("🗣️ Deixe sua opinião")
+    st.subheader("🗣️ Pesquisa de Satisfação e Perfil")
     
+    # --- 1. Verificação de Identidade ---
     nome_feedback = st.session_state.get("nome_participante", "").strip()
     if not nome_feedback:
-        st.warning("⚠️ **Atenção:** Você precisa preencher seu **Nome** na aba '✏️ Dados' para poder enviar feedback.")
+        st.warning("⚠️ **Bloqueio de Segurança:** Para participar da pesquisa, preencha seu **Nome** na aba '✏️ Dados'.")
+    else:
+        st.success(f"Participante Identificado: **{nome_feedback}**")
 
+    # --- 2. O Grande Formulário ---
     with st.form("form_feedback"):
-        st.write("O que achou da análise?")
+        
+        # =======================================
+        # BLOCO A: PERFIL DEMOGRÁFICO (NOVO!)
+        # =======================================
+        st.markdown("### 1. Perfil Demográfico")
+        st.caption("Dados estatísticos para caracterização da amostra da pesquisa.")
+        
+        col_demo1, col_demo2 = st.columns(2)
+        
+        with col_demo1:
+            sexo = st.selectbox(
+                "Sexo:", 
+                ["Masculino", "Feminino", "Prefiro não informar", "Outro"],
+                index=None,
+                placeholder="Selecione..."
+            )
+            idade_faixa = st.selectbox(
+                "Faixa Etária:",
+                ["18-24 anos", "25-34 anos", "35-44 anos", "45-54 anos", "55+ anos"],
+                index=None,
+                placeholder="Selecione..."
+            )
+
+        with col_demo2:
+            escolaridade = st.selectbox(
+                "Nível de Escolaridade:", 
+                ["Ensino Médio", "Graduação (Cursando)", "Graduação (Completo)", "Pós-Graduação (Mestrado/Doutorado)"],
+                index=None,
+                placeholder="Selecione..."
+            )
+            area_atuacao = st.selectbox(
+                "Área de Formação/Atuação:",
+                ["Ciências Exatas/Tecnologia", "Ciências Humanas/Sociais", "Ciências da Saúde/Biológicas", "Linguística/Letras/Artes", "Outra"],
+                index=None,
+                placeholder="Selecione..."
+            )
+
+        st.divider()
+
+        # =======================================
+        # BLOCO B: AVALIAÇÃO DA FERRAMENTA
+        # =======================================
+        st.markdown("### 2. Avaliação da Experiência")
+        st.write("Qual sua nota geral para o StoryVis?")
         feedback_stars = st.feedback("stars")
         
-        comentario = st.text_area(
-            "Comentário (Opcional):", 
-            placeholder="Ex: O gráfico ficou ótimo, mas a cor estava ruim..."
-        )
+        st.markdown("#### Checklist de Funcionalidades Testadas")
+        st.caption("Marque o resultado das etapas que você realizou:")
         
-        enviou = st.form_submit_button(
-            "Enviar Avaliação", 
-            type="primary",
-            disabled=(not nome_feedback)
-        )
+        col_testes_A, col_testes_B = st.columns(2)
+        
+        with col_testes_A:
+            c1_resp = st.radio("1. Bloqueio de Segurança (Nome):", ["Funcionou", "Fiquei confuso", "Não testei"], index=2)
+            c2_resp = st.radio("2. Gráfico Demo (IA):", ["Funcionou", "Deu erro", "Não testei"], index=2)
+            c3_resp = st.radio("3. Mapa/Geocodificação:", ["Mapa gerado", "Erro no mapa", "Não testei"], index=2)
+
+        with col_testes_B:
+            c4_resp = st.radio("4. Evolução (2º Gráfico):", ["Adicionou ok", "Substituiu o anterior", "Não testei"], index=2)
+            c5_resp = st.radio("5. Edição de Código:", ["Funcionou", "Falhou", "Não testei"], index=2)
+
+        st.divider()
+        
+        st.markdown("### 3. Considerações Finais")
+        comentario = st.text_area("Comentários, sugestões ou bugs encontrados:", placeholder="Digite aqui...")
+        
+        # Botão de Envio
+        enviou = st.form_submit_button("✅ Enviar Pesquisa", type="primary", disabled=(not nome_feedback))
         
         if enviou:
-            if LOGGING_ATIVO:
-                nota_final = (feedback_stars + 1) if feedback_stars is not None else 0
-                
-                if nota_final > 0:
+            # Validação: Obriga a preencher os dados demográficos básicos
+            if not all([sexo, idade_faixa, escolaridade, area_atuacao]):
+                st.error("⚠️ Por favor, preencha todos os campos do **Perfil Demográfico** antes de enviar.")
+            elif feedback_stars is None:
+                st.error("⚠️ Por favor, dê uma nota (estrelas) para a ferramenta.")
+            else:
+                if LOGGING_ATIVO:
+                    # Prepara os pacotes de dados
+                    nota_final = feedback_stars + 1
+                    
+                    dados_demograficos = {
+                        "sexo": sexo,
+                        "faixa_etaria": idade_faixa,
+                        "escolaridade": escolaridade,
+                        "area": area_atuacao
+                    }
+                    
+                    detalhes_cenarios = {
+                        "C1_Bloqueio": c1_resp,
+                        "C2_Demo": c2_resp,
+                        "C3_Geo": c3_resp,
+                        "C4_Evolucao": c4_resp,
+                        "C5_Codigo": c5_resp
+                    }
+                    
+                    # Salva no Pinecone
                     salvou = salvar_feedback_pinecone(
                         usuario=nome_feedback,
                         estrelas=nota_final,
-                        comentario=comentario
+                        comentario=comentario,
+                        dados_demograficos=dados_demograficos, # <--- NOVO ARGUMENTO
+                        detalhes_tecnicos=detalhes_cenarios
                     )
                     
                     if salvou:
-                        st.toast("Obrigado pelo feedback! 🌟", icon="✅")
-                        time.sleep(1.5)
+                        st.balloons()
+                        st.success("Pesquisa enviada com sucesso! Muito obrigado pela colaboração.")
+                        time.sleep(2)
                         st.rerun()
                 else:
-                    st.warning("Por favor, selecione as estrelas antes de enviar.")
-            else:
-                st.error("Erro: Logger desativado.")
+                    st.error("Erro: Sistema de logs desativado.")
 
 st.divider()
 st.caption("LABVIS - UFPA © 2025")

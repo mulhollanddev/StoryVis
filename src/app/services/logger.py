@@ -129,10 +129,12 @@ def ler_ultimos_logs(limit=10):
         print(f"Erro ao ler logs: {e}")
         return []
     
-def salvar_feedback_pinecone(usuario, estrelas, comentario):
+def salvar_feedback_pinecone(usuario, estrelas, comentario, dados_demograficos=None, detalhes_tecnicos=None):
     """
-    Salva o feedback explícito do usuário (1 a 5 estrelas + texto).
+    Salva o feedback completo (Perfil + Técnico) no Pinecone.
+    Atualizado para aceitar dados demográficos e checklist de testes.
     """
+    # Verificação de segurança
     if not PINECONE_API_KEY or not INDEX_NAME:
         return False
 
@@ -140,23 +142,45 @@ def salvar_feedback_pinecone(usuario, estrelas, comentario):
         pc = Pinecone(api_key=PINECONE_API_KEY)
         index = pc.Index(INDEX_NAME)
 
+        # Gera ID único
         log_id = f"feed_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        
+        # Data legível
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # 1. Metadados Base
         metadata = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "tipo": "pesquisa_satisfacao_v2", # Mudamos a tag para diferenciar dos antigos
+            "timestamp": timestamp,
             "usuario": str(usuario),
             "estrelas": int(estrelas),
-            "comentario": str(comentario)[:1000], # Limita tamanho
-            "tipo": "feedback_usuario" # <--- Tipo diferente para filtrar depois
+            "comentario": str(comentario)[:1000]
         }
 
-        # Vetor dummy
+        # 2. Injeta Dados Demográficos (Flattening/Achatando para o Pinecone)
+        # O Pinecone não busca bem dentro de JSONs aninhados, por isso criamos campos "demo_..."
+        if dados_demograficos and isinstance(dados_demograficos, dict):
+            metadata["demo_sexo"] = str(dados_demograficos.get("sexo", "N/A"))
+            metadata["demo_idade"] = str(dados_demograficos.get("faixa_etaria", "N/A"))
+            metadata["demo_escolaridade"] = str(dados_demograficos.get("escolaridade", "N/A"))
+            metadata["demo_area"] = str(dados_demograficos.get("area", "N/A"))
+
+        # 3. Injeta Detalhes Técnicos (Flattening)
+        # Transforma {'C1_Bloqueio': 'Funcionou'} em 'teste_c1_bloqueio': 'Funcionou'
+        if detalhes_tecnicos and isinstance(detalhes_tecnicos, dict):
+            for k, v in detalhes_tecnicos.items():
+                metadata[f"teste_{k.lower()}"] = str(v)
+
+        # 4. Vetor Dummy (Respeitando sua função get_dummy_vector e dimensão 1024)
         vector_valido = get_dummy_vector()
 
+        # 5. Upsert no Namespace correto
         index.upsert(
             vectors=[(log_id, vector_valido, metadata)],
             namespace=NAMESPACE_LOGS
         )
+        
+        print(f"✅ Feedback {log_id} salvo com sucesso!")
         return True
 
     except Exception as e:
