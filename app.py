@@ -21,6 +21,7 @@ try:
     from src.app.views.tab_dashboard import render_tab_dashboard
     from src.app.views.tab_insights import render_tab_insights
     from src.app.views.tab_feedback import render_tab_feedback
+    from src.app.views.onboarding import verificar_onboarding, botao_ajuda_sidebar
     
     LOGGING_ATIVO = True
 except ImportError as e:
@@ -48,6 +49,10 @@ inicializar_session_state(carregar_demo_inicial)
 # Interface Principal
 # ===============================================
 st.title("📊 StoryVis: Analytics com IA")
+
+# --- 1. CHAMADA DO ONBOARDING (Coloque logo após o título) ---
+verificar_onboarding()
+
 
 # Definição das Abas
 tab_dados, tab_dash, tab_insights, tab_feedback = st.tabs([
