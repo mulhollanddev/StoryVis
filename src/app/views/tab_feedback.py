@@ -32,15 +32,17 @@ def render_tab_feedback(logging_ativo=True):
         conhece_prog = st.radio("Sabe programar?", ["Não", "Básico", "Sim"], horizontal=True)
 
         st.divider()
-        st.markdown("### 3. Validação")
+        st.markdown("### 3. Validação do Projeto")
         col_t1, col_t2 = st.columns(2)
         with col_t1:
             c1_resp = st.radio("Bloqueio (Nome):", ["OK", "Confuso", "N/A"], index=2)
             c2_resp = st.radio("Gráfico Demo:", ["OK", "Erro", "N/A"], index=2)
-            c3_resp = st.radio("Mapa:", ["OK", "Erro", "N/A"], index=2)
+            c3_resp = st.radio("Mapa (Geo):", ["OK", "Erro", "N/A"], index=2)
         with col_t2:
             c4_resp = st.radio("Evolução (Append):", ["OK", "Erro", "N/A"], index=2)
             c5_resp = st.radio("Editor Código:", ["OK", "Erro", "N/A"], index=2)
+            # --- NOVO CAMPO AQUI ---
+            nivel_complexidade = st.radio("Nível de Complexidade do Projeto:", ["Fácil", "Médio", "Difícil"], index=None)
 
         st.write("")
         st.write("Nota Final:")
@@ -50,8 +52,9 @@ def render_tab_feedback(logging_ativo=True):
         enviou = st.form_submit_button("✅ Enviar Pesquisa Completa", type="primary", disabled=(not nome_feedback))
         
         if enviou:
-            if not all([sexo, idade_faixa, escolaridade, area_atuacao, nivel_dados, nivel_viz]):
-                st.error("⚠️ Preencha todos os campos de Perfil.")
+            # Adicionei 'nivel_complexidade' na validação para ser obrigatório
+            if not all([sexo, idade_faixa, escolaridade, area_atuacao, nivel_dados, nivel_viz, nivel_complexidade]):
+                st.error("⚠️ Preencha todos os campos de Perfil e Complexidade.")
             elif feedback_stars is None:
                 st.error("⚠️ Dê uma nota (estrelas).")
             else:
@@ -68,7 +71,8 @@ def render_tab_feedback(logging_ativo=True):
                             "checklist": {
                                 "C1_Bloqueio": c1_resp, "C2_Demo": c2_resp,
                                 "C3_Geo": c3_resp, "C4_Evolucao": c4_resp, 
-                                "C5_Codigo": c5_resp
+                                "C5_Codigo": c5_resp,
+                                "C6_Complexidade": nivel_complexidade # <--- Enviando o novo dado
                             }
                         }
                         
