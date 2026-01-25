@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+import json
 from datetime import datetime
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -23,165 +24,79 @@ def get_dummy_vector():
     """
     return [0.01] * DIMENSION
 
-def salvar_log_pinecone(
-    usuario, 
-    input_usuario, 
-    output_ia,         # Código Python gerado
-    output_narrativa,  # Texto da Narrativa (Gramática dos Gráficos)
-    status="Sucesso", 
-    execution_time=0.0, 
-    terminal_log="",
-    dataset_rows=0,
-    dataset_cols=0,
-    data_source="Desconhecido",
-    action_type="Create",
-    est_input_tokens=0,
-    est_output_tokens=0
-):
+def salvar_sessao_completa(session_id, usuario, feedback_data, logs_buffer):
     """
-    Salva logs estatísticos avançados para BI no Pinecone.
-    """
-    # Verificação de segurança se as chaves existem
-    if not PINECONE_API_KEY or not INDEX_NAME:
-        return False
-
-    try:
-        pc = Pinecone(api_key=PINECONE_API_KEY)
-        index = pc.Index(INDEX_NAME)
-
-        # 1. Cria ID único para o log
-        log_id = f"log_{int(time.time())}_{str(uuid.uuid4())[:8]}"
-
-        # 2. Tratamento de Strings Longas (Corta para não estourar limite de metadata)
-        trace_limpo = str(terminal_log)
-        if len(trace_limpo) > 4000:
-            trace_limpo = trace_limpo[:2000] + "\n...[CORTADO]...\n" + trace_limpo[-2000:]
-
-        # 3. Monta o Metadata (Onde os dados vivem)
-        metadata = {
-            # --- BÁSICOS ---
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "usuario": str(usuario),
-            "status": status,
-            "latency_seconds": float(execution_time),
-            
-            # --- CONTEXTO DA IA ---
-            "input_prompt": str(input_usuario),
-            "output_resumo": str(output_ia)[:1500],       # Código (cortado)
-            "output_narrativa": str(output_narrativa)[:3000], # Narrativa (cortada)
-            "crew_trace": trace_limpo,
-            
-            # --- ESTATÍSTICAS DE DADOS (BI) ---
-            "data_rows": int(dataset_rows),
-            "data_cols": int(dataset_cols),
-            "data_source": str(data_source),
-            "action_type": str(action_type),
-            
-            # --- ECONOMIA (TOKENS) ---
-            "tokens_in_est": int(est_input_tokens),
-            "tokens_out_est": int(est_output_tokens),
-            "code_lines": len(str(output_ia).split('\n')),
-            
-            "tipo": "log_sistema_v3"
-        }
-
-        # 4. Upsert usando vetor dummy
-        vector_valido = get_dummy_vector()
-
-        index.upsert(
-            vectors=[(log_id, vector_valido, metadata)],
-            namespace=NAMESPACE_LOGS
-        )
-        return True
-
-    except Exception as e:
-        print(f"❌ Erro ao salvar log no Pinecone: {e}")
-        return False
-
-def ler_ultimos_logs(limit=10):
-    """
-    Busca os logs mais recentes usando o vetor dummy como âncora.
-    """
-    try:
-        pc = Pinecone(api_key=PINECONE_API_KEY)
-        index = pc.Index(INDEX_NAME)
-        
-        # Usa o mesmo vetor de 0.01 para buscar
-        vector_consulta = get_dummy_vector()
-        
-        results = index.query(
-            vector=vector_consulta,
-            top_k=limit,
-            include_metadata=True,
-            namespace=NAMESPACE_LOGS
-        )
-        
-        logs = []
-        for match in results.get('matches', []):
-            if match.get('metadata'):
-                logs.append(match['metadata'])
-        
-        # Tenta ordenar por data (string), reverso
-        logs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-            
-        return logs
-    except Exception as e:
-        print(f"Erro ao ler logs: {e}")
-        return []
-    
-def salvar_feedback_pinecone(usuario, estrelas, comentario, dados_demograficos=None, detalhes_tecnicos=None):
-    """
-    Salva o feedback completo (Demográfico + Técnico + Testes) no Pinecone.
+    Consolida Feedback + Perfil + Histórico de Ações em um ÚNICO registro no Pinecone.
     """
     if not PINECONE_API_KEY or not INDEX_NAME:
+        print("⚠️ Erro: Configurações do Pinecone ausentes.")
         return False
 
     try:
         pc = Pinecone(api_key=PINECONE_API_KEY)
         index = pc.Index(INDEX_NAME)
 
-        log_id = f"feed_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        # O ID do registro é o ID da Sessão (único por visita)
+        record_id = str(session_id)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 1. Metadados Base
+        # 1. Monta os Metadados "Planos" (Para filtros e gráficos no BI)
         metadata = {
-            "tipo": "pesquisa_satisfacao_v3_full", # Nova versão para identificar
+            "record_type": "sessao_consolidada",
+            "session_id": str(session_id),
             "timestamp": timestamp,
             "usuario": str(usuario),
-            "estrelas": int(estrelas),
-            "comentario": str(comentario)[:1000]
+            
+            # --- Dados do Feedback ---
+            "nota_estrelas": int(feedback_data.get("estrelas", 0)),
+            "comentario": str(feedback_data.get("comentario", ""))[:1000],
+            
+            # --- Dados Demográficos (Achatados) ---
+            "demo_sexo": str(feedback_data.get("sexo", "N/A")),
+            "demo_idade": str(feedback_data.get("faixa_etaria", "N/A")),
+            "demo_escolaridade": str(feedback_data.get("escolaridade", "N/A")),
+            "demo_area": str(feedback_data.get("area", "N/A")),
+            
+            # --- Dados Técnicos (Perfil) ---
+            "tec_nivel_dados": str(feedback_data.get("tec_nivel_dados", "N/A")),
+            "tec_nivel_viz": str(feedback_data.get("tec_nivel_viz", "N/A")),
+            "tec_freq_ai": str(feedback_data.get("tec_freq_ai", "N/A")),
+            "tec_prog": str(feedback_data.get("tec_prog", "N/A")),
+            
+            # --- Checklist de Testes ---
+            "teste_bloqueio": str(feedback_data.get("checklist", {}).get("C1_Bloqueio", "N/A")),
+            "teste_demo": str(feedback_data.get("checklist", {}).get("C2_Demo", "N/A")),
+            "teste_geo": str(feedback_data.get("checklist", {}).get("C3_Geo", "N/A")),
+            "teste_evolucao": str(feedback_data.get("checklist", {}).get("C4_Evolucao", "N/A")),
+            "teste_codigo": str(feedback_data.get("checklist", {}).get("C5_Codigo", "N/A")),
+
+            # --- Resumo da Sessão ---
+            "qtd_interacoes": len(logs_buffer),
+            "tempo_total_gasto": sum([log.get('execution_time', 0) for log in logs_buffer])
         }
 
-        # 2. Injeta Perfil (Demográfico + Técnico)
-        # O Pinecone gosta de dados planos ("flat"), então desmembramos o dicionário
-        if dados_demograficos and isinstance(dados_demograficos, dict):
-            # Demográficos
-            metadata["demo_sexo"] = str(dados_demograficos.get("sexo", "N/A"))
-            metadata["demo_idade"] = str(dados_demograficos.get("faixa_etaria", "N/A"))
-            metadata["demo_escolaridade"] = str(dados_demograficos.get("escolaridade", "N/A"))
-            metadata["demo_area"] = str(dados_demograficos.get("area", "N/A"))
-            
-            # Técnicos (Novos)
-            metadata["tec_freq_ai"] = str(dados_demograficos.get("tec_freq_ai", "N/A"))
-            metadata["tec_nivel_dados"] = str(dados_demograficos.get("tec_nivel_dados", "N/A"))
-            metadata["tec_nivel_viz"] = str(dados_demograficos.get("tec_nivel_viz", "N/A"))
-            metadata["tec_prog"] = str(dados_demograficos.get("tec_prog", "N/A"))
+        # 2. Guarda o Histórico Completo como JSON String
+        # (Isso permite salvar vários gráficos dentro de um único metadata)
+        historico_json = json.dumps(logs_buffer, ensure_ascii=False)
+        
+        # Pinecone tem limite de 40KB por metadado. Vamos cortar se for gigante.
+        if len(historico_json) > 38000:
+            metadata["full_history_json"] = historico_json[:19000] + "...[CORTADO]..." + historico_json[-19000:]
+            metadata["history_truncated"] = "True"
+        else:
+            metadata["full_history_json"] = historico_json
+            metadata["history_truncated"] = "False"
 
-        # 3. Injeta Checklist Técnico dos Testes
-        if detalhes_tecnicos and isinstance(detalhes_tecnicos, dict):
-            for k, v in detalhes_tecnicos.items():
-                metadata[f"teste_{k.lower()}"] = str(v)
-
-        # 4. Vetor Dummy
+        # 3. Envia para o Pinecone
         vector_valido = get_dummy_vector()
-
-        # 5. Upsert
         index.upsert(
-            vectors=[(log_id, vector_valido, metadata)],
+            vectors=[(record_id, vector_valido, metadata)],
             namespace=NAMESPACE_LOGS
         )
+        
+        print(f"✅ Sessão {record_id} consolidada com sucesso!")
         return True
 
     except Exception as e:
-        print(f"❌ Erro ao salvar feedback: {e}")
+        print(f"❌ Erro ao salvar sessão completa: {e}")
         return False

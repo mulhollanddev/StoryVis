@@ -223,3 +223,8 @@ def buscar_coordenadas_ia(lista_locais):
                     break 
             
     return dicionario_mestre
+
+def is_python_code(text):
+    """Verifica se o texto parece código Python ou texto natural."""
+    keywords = ['import ', 'st.', 'pd.', 'print(', 'def ', '=', 'return']
+    return any(k in text for k in keywords)
