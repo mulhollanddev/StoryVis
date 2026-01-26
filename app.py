@@ -22,7 +22,7 @@ try:
     from src.app.views.tab_insights import render_tab_insights
     from src.app.views.tab_feedback import render_tab_feedback
     from src.app.views.onboarding import verificar_onboarding, botao_ajuda_sidebar
-    from src.app.views.tab_resultados import render_tab_resultados # <--- NOVO IMPORT
+    #from src.app.views.tab_resultados import render_tab_resultados # <--- NOVO IMPORT
     
     LOGGING_ATIVO = True
 except ImportError as e:
@@ -61,7 +61,7 @@ tab_dados, tab_dash, tab_insights, tab_feedback, tab_admin = st.tabs([
     "📈 Dashboard", 
     "📝 Sobre os gráficos",
     "🗣️ Feedback",
-    "🔐 "
+    #"🔐 "
 ])
 
 # Renderização do Conteúdo de Cada Aba
@@ -77,9 +77,8 @@ with tab_insights:
 with tab_feedback:
     render_tab_feedback(logging_ativo=LOGGING_ATIVO)
 
-with tab_admin:
-    # Dica de segurança simples: só mostra se você quiser, ou pode deixar aberto
-    render_tab_resultados()
+# with tab_admin:
+#     render_tab_resultados()
 
 st.divider()
 st.caption("LABVIS - UFPA © 2026")
