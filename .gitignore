@@ -153,5 +153,7 @@ cython_debug/
 # IDEs
 .vscode/
 .idea/
+#
 teste.py
 knowledge/
+src/app/views/tab_resultados.py
