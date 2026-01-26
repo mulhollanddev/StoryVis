@@ -56,7 +56,7 @@ verificar_onboarding()
 
 
 # Definição das Abas
-tab_dados, tab_dash, tab_insights, tab_feedback, tab_admin = st.tabs([
+tab_dados, tab_dash, tab_insights, tab_feedback = st.tabs([
     "✏️ Dados & Configuração", 
     "📈 Dashboard", 
     "📝 Sobre os gráficos",
