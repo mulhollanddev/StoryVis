@@ -88,74 +88,34 @@ def get_llm():
 # --- 2. DETECÇÃO INTELIGENTE DE COLUNAS (IA) ---
 def detectar_coluna_geo_ia(df):
     """
-    Estratégia Híbrida v3:
-    Identifica qual coluna serve de FONTE (Input) para a geocodificação.
+    Analisa as colunas para tentar identificar qual contém dados geográficos (Cidade, Estado, País).
     """
-    colunas = list(df.columns)
-    colunas_lower = [c.lower() for c in colunas]
-
-    # 1. VERIFICAÇÃO DE CONCLUSÃO (ATUALIZADO)
-    # Se a coluna 'geo_code' (chave para o Altair) já existe, 
-    # significa que já processamos essa planilha. O detetive pode descansar.
-    if 'geo_code' in colunas_lower:
+    if df is None or df.empty:
         return None
-
-    # --- FASE 1: BUSCA RÁPIDA (Palavras-Chave Expandida) ---
-    # Procuramos colunas que contenham nomes de locais (Input)
-    termos_comuns = [
-        # Cidades/Municípios
-        'município', 'municipio', 'municípios', 'municipios',
-        'cidade', 'cidades', 'city', 'cities',
-        'nm_mun', 'no_municipio', 'nome_municipio', 'nom_municipio',
-        'localidade', 'local', 'cidade/uf', 'municipio_residencia',
         
-        # Estados/UFs (Importante para mapas de área)
-        'estado', 'estados', 'state', 'states',
-        'uf', 'sg_uf', 'sigla_uf', 'nm_uf', 'nome_estado',
-        
-        # Países
-        'país', 'pais', 'country', 'countries', 'nacao', 'nation', 'territorio'
-    ]
+    # --- A CORREÇÃO ESTÁ AQUI ---
+    # Convertemos o nome de todas as colunas para string antes de usar .lower()
+    # Isso evita erro se o cabeçalho for um número (ex: 2024, 2025)
+    colunas = [str(c) for c in df.columns] 
+    colunas_lower = [c.lower() for c in colunas]
     
-    # A. Busca Exata (O nome da coluna é exatamente "Cidade")
-    for col in colunas:
-        if col.lower().strip() in termos_comuns:
-            return col
-            
-    # B. Busca Parcial (O nome da coluna contém "Cidade", ex: "Cidade Nascimento")
-    for col in colunas:
-        c_lower = col.lower()
-        for termo in termos_comuns:
-            # Verifica se o termo está contido e tem tamanho mínimo para evitar falsos positivos
-            if termo in c_lower and len(c_lower) > 2:
-                return col
-
-    # --- FASE 2: INTELIGÊNCIA ARTIFICIAL (Fallback) ---
-    # Se os nomes forem estranhos (ex: "Zona_X"), a IA analisa o CONTEÚDO.
-    try:
-        llm = get_llm()
-        amostra = df.head(3).to_dict(orient='records')
-        
-        prompt = f"""
-        Analise estas colunas: {colunas}
-        Amostra de dados: {amostra}
-
-        TAREFA: Qual coluna contém NOMES DE LUGARES (Cidades, Estados ou Países)?
-        
-        Responda APENAS JSON: {{ "coluna_encontrada": "nome_exato_da_coluna" }}
-        Se nada servir, responda: {{ "coluna_encontrada": null }}
-        """
-        
-        res = llm.call([{"role": "user", "content": prompt}])
-        match = re.search(r'(\{.*\})', res, re.DOTALL)
-        if match:
-            dados = json.loads(match.group(1))
-            return dados.get("coluna_encontrada")
-            
-    except Exception as e:
-        print(f"Erro no fallback IA: {e}")
+    # Palavras-chave para identificar local
+    keywords_geo = ['cidade', 'city', 'municipio', 'município', 
+                    'estado', 'state', 'uf', 'pais', 'country', 'local', 'location']
     
+    # 1. Tenta match exato ou parcial
+    for col_orig, col_low in zip(df.columns, colunas_lower):
+        if any(k in col_low for k in keywords_geo):
+            # Verifica se o conteúdo parece texto (não numérico)
+            try:
+                amostra = df[col_orig].dropna().iloc[0]
+                if isinstance(amostra, str):
+                    return col_orig
+            except:
+                continue
+                
     return None
+
 
 # --- 3. GEOCODIFICAÇÃO EM LOTES (IA) ---
 def buscar_coordenadas_ia(lista_locais):
