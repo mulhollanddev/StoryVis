@@ -32,16 +32,15 @@ def render_tab_feedback(logging_ativo=True):
         conhece_prog = st.radio("Sabe programar?", ["Não", "Básico", "Sim"], horizontal=True)
 
         st.divider()
-        st.markdown("### 3. Validação do Projeto")
+        st.markdown("### 3. Satisfação com as visualizações geradas pela IA")
         col_t1, col_t2 = st.columns(2)
         with col_t1:
-            c1_resp = st.radio("Bloqueio (Nome):", ["OK", "Confuso", "N/A"], index=2)
-            c2_resp = st.radio("Gráfico Demo:", ["OK", "Erro", "N/A"], index=2)
-            c3_resp = st.radio("Mapa (Geo):", ["OK", "Erro", "N/A"], index=2)
+            c1_resp = st.radio("Satisfação com os gráficos gerados:", ["OK", "Confuso", "N/A"], index=2)
+            c2_resp = st.radio("Satisfação com Dashboard como um todo:", ["OK", "Erro", "N/A"], index=2)
+            c3_resp = st.radio("Satisfação com a geração de Mapa(s):", ["OK", "Erro", "N/A"], index=2)
         with col_t2:
-            c4_resp = st.radio("Evolução (Append):", ["OK", "Erro", "N/A"], index=2)
-            c5_resp = st.radio("Editor Código:", ["OK", "Erro", "N/A"], index=2)
-            # --- NOVO CAMPO AQUI ---
+            c4_resp = st.radio("Satisfação com a Evolução dos Gráficos:", ["OK", "Erro", "N/A"], index=2)
+            c5_resp = st.radio("Satisfação com o Editor Código:", ["OK", "Erro", "N/A"], index=2)
             nivel_complexidade = st.radio("Nível de Complexidade do Projeto:", ["Fácil", "Médio", "Difícil"], index=None)
 
         st.write("")
