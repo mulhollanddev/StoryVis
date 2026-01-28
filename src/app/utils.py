@@ -8,15 +8,36 @@ import json
 from crewai import LLM
 
 @st.cache_data(ttl=3600, show_spinner=False)
+# No arquivo src/app/utils.py
+
 def carregar_dados(uploaded_file):
-    """Carrega CSV ou Excel com Cache."""
+    """
+    Carrega CSV ou Excel com tratamento robusto de encoding (UTF-8 e Latin-1).
+    """
     try:
-        if uploaded_file.name.endswith('.csv'):
-            return pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith(('.xls', '.xlsx')):
+        nome_arquivo = uploaded_file.name.lower()
+        
+        if nome_arquivo.endswith('.csv'):
+            try:
+                # TENTATIVA 1: Padrão UTF-8
+                uploaded_file.seek(0) # Garante que está no começo do arquivo
+                # sep=None e engine='python' faz o pandas descobrir se é virgula ou ponto-e-virgula sozinho
+                return pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python')
+            
+            except UnicodeDecodeError:
+                # TENTATIVA 2: Padrão Windows/Excel (Latin-1)
+                uploaded_file.seek(0) # Reseta o ponteiro para ler de novo
+                return pd.read_csv(uploaded_file, encoding='latin-1', sep=None, engine='python')
+                
+        elif nome_arquivo.endswith(('.xls', '.xlsx')):
             return pd.read_excel(uploaded_file)
+            
+        else:
+            st.error("Formato de arquivo não suportado. Use CSV ou Excel.")
+            return None
+
     except Exception as e:
-        st.error(f"Erro ao ler arquivo: {e}")
+        st.error(f"Erro crítico ao ler arquivo: {e}")
         return None
 
 def salvar_temp_csv(df):
