@@ -1,5 +1,9 @@
 import streamlit as st
 
+# Função de Callback (Executa imediatamente ao clicar)
+def fechar_modal():
+    st.session_state["primeiro_acesso"] = False
+
 @st.dialog("👋 Bem-vindo ao StoryVis!")
 def mostrar_tour_inicial():
     """
@@ -21,7 +25,7 @@ def mostrar_tour_inicial():
         * **Upload:** Suba seu arquivo CSV ou Excel.
         * **Mapa Inteligente:** Se seus dados tiverem cidades, nossa IA detecta e cria mapas automáticos!
         """)
-        st.image("https://placehold.co/600x200/EEE/31343C?text=Aba+Dados", caption="Configure tudo na primeira aba")
+        # st.image("https://placehold.co/600x200/EEE/31343C?text=Aba+Dados", caption="Configure tudo na primeira aba")
 
     with tab2:
         st.success("Passo 2: A Mágica Acontece")
@@ -48,15 +52,17 @@ def mostrar_tour_inicial():
         """)
 
     st.divider()
-    if st.button("🚀 Entendi, vamos começar!", type="primary", use_container_width=True):
-        st.session_state["primeiro_acesso"] = False
+    
+    # --- CORREÇÃO AQUI ---
+    # Usamos on_click=fechar_modal para garantir que o estado mude
+    if st.button("🚀 Entendi, vamos começar!", type="primary", use_container_width=True, on_click=fechar_modal):
         st.rerun()
 
 def verificar_onboarding():
     """
     Função chamada no app.py para checar se deve abrir o tour.
     """
-    # Se a variável não existe, é a primeira vez
+    # Inicializa a variável se ela não existir
     if "primeiro_acesso" not in st.session_state:
         st.session_state["primeiro_acesso"] = True
 
@@ -68,5 +74,7 @@ def botao_ajuda_sidebar():
     """
     Coloca um botão na sidebar para rever o tour quando quiser.
     """
+    # Ao clicar aqui, forçamos o estado para True e damos rerun para abrir o modal
     if st.sidebar.button("❓ Como usar o sistema"):
-        mostrar_tour_inicial()
+        st.session_state["primeiro_acesso"] = True
+        st.rerun()
